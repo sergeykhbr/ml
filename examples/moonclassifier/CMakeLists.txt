@@ -44,10 +44,15 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT m
 
 if(UNIX)
 else()
-#  add_custom_command(TARGET libguim1 
-#          POST_BUILD
-#          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/post_build_event.bat "\"${SIM_BINARY_DIRECTORY}\""
-#          )
+    # Find the windeployqt executable relative to the Qt5 Widgets library location
+    get_target_property(_qt5_widgets_loc Qt5::Widgets LOCATION)
+    get_filename_component(_qt5_bin_dir "${_qt5_widgets_loc}" DIRECTORY)
+    
+    # Run windeployqt automatically after building the executable
+    add_custom_command(TARGET moonclsr POST_BUILD
+        COMMAND "${_qt5_bin_dir}/windeployqt.exe" "$<TARGET_FILE:moonclsr>"
+        COMMENT "Deploying Qt DLLs for moonclsr..."
+    )
 endif()
 
 

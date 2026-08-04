@@ -3,6 +3,9 @@
 #include <cmath>
 #include <random>
 #include <algorithm>
+#include <QApplication>
+#include <QLabel>
+#include <QWidget>
 
 // Architecture Parameters
 const int INPUT_DIM = 2;   // (x, y) coordinates
@@ -133,7 +136,14 @@ public:
     }
 };
 
-int main() {
+int main(int argc, char *argv[]) {
+    QApplication app(argc, argv);
+
+    QWidget window;
+    window.setWindowTitle("moonclsr");
+    window.resize(320, 240);
+    window.show();
+
     // Generate Moon Dataset
     std::vector<DataPoint> dataset;
     std::random_device rd;
@@ -168,6 +178,8 @@ int main() {
             model.trainStep(dataset[i].x, dataset[i].y, dataset[i].label, false);
         }
     }
+
+    app.exec();
 
     return 0;
 }
