@@ -1,17 +1,106 @@
 #include "PlotWidget.h"
+#include <QDir>
 
 PlotWidget::PlotWidget(const std::vector<DataPoint>& dots,
                        MoonClassifier *classifier,
+                       uint32_t seed,
                        QWidget* parent) 
-    : QWidget(parent), dots_(dots), classifier_(classifier)
+    : QWidget(parent), dots_(dots), classifier_(classifier), seed_(seed)
 {
     scalex_ = 0;
     scaley_ = 0;
+    frameCnt_ = 0;
+    tmr_ = new QTimer(this);
+    connect(tmr_, &QTimer::timeout,
+            this, &PlotWidget::onTimeout);
+}
+
+void PlotWidget::saveEpoch(int epoch) {
+    QSize sz = size();
+    int width = sz.width();
+    int height = sz.height();
+    float apperture = 2.0f*(1.0f + IN_DATA_DISTRIBUTION);      // -1.2 to +1.2
+    scalex_ = static_cast<float>(width) / apperture;
+    scaley_ = static_cast<float>(height) / apperture;
+
+    float x, y;
+    QPoint p;
+    float *frame = new float [width * height];
+    float *probability = frame;
+    for (int w = 0; w < width; w++) {
+        for (int h = 0; h < height; h++) {
+            p = QPoint(w, h);
+            point2xy(p, x, y);
+            *probability = classifier_->forwardPass(x, y);
+            probability++;
+        }
+    }
+    listBorders_.push_back(frame);
+
+    // save image:
+    QDir dir(tr("screenshots"));
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    QImage img = QImage(width, height, QImage::Format_ARGB32_Premultiplied);
+    drawImage(img, frame);
+    QString filename = QString("frame_%1.png").arg(epoch, 4, 10, QChar('0'));
+    QString fullname = dir.filePath(filename);
+    img.save(fullname);
+
+    // img2webp.exe -loop 0 -d 100 frame_*.png -o training_animation.webp
 }
 
 void PlotWidget::point2xy(QPoint &p, float &x, float &y) {
-    x = (p.x() / scalex_) - 1.2f;
-    y = (p.y() / scaley_) - 1.2f;
+    x = (p.x() / scalex_) - (1.0f + IN_DATA_DISTRIBUTION);
+    y = (p.y() / scaley_) - (1.0f + IN_DATA_DISTRIBUTION);
+}
+
+QPoint PlotWidget::xy2point(float x, float y) {
+    QPoint ret;
+    ret.setX((x + (1.0f + IN_DATA_DISTRIBUTION))*scalex_);
+    ret.setY((y + (1.0f + IN_DATA_DISTRIBUTION))*scaley_);
+    return ret;
+}
+
+void PlotWidget::showEvent(QShowEvent *event) {
+    tmr_->start(200);    // ms
+}
+
+void PlotWidget::drawImage(QImage &img, float *frame) {
+    img.fill(Qt::white);
+    QPainter painter(&img);
+
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(Qt::darkGray);
+    painter.drawText(80, 12, QString("Neurons: %1").arg(HIDDEN_DIM));
+    painter.drawText(80, 24, QString("Epoch: %1").arg(frameCnt_));
+    painter.drawText(80, 36, QString("Seed: %1").arg(seed_, 8, 16));
+
+    // Draw generated dataset:
+    painter.setPen(Qt::NoPen);           // No outline
+    for (const auto& dot : dots_) {
+        if (dot.label) {
+            painter.setBrush(Qt::red);
+        } else {
+            painter.setBrush(Qt::blue);
+        }
+        painter.drawEllipse(xy2point(dot.x, dot.y), 2, 2);
+    }
+
+    // go through all pixels to find border:
+    painter.setBrush(Qt::black);
+    QPoint p;
+    float probability;
+    for (int w = 0; w < img.width(); w++) {
+        for (int h = 0; h < img.height(); h++) {
+            p = QPoint(w, h);
+            probability = *frame++;
+            if (probability > 0.45f && probability < 0.55f) {
+                painter.drawEllipse(p, 2, 2);
+            }
+        }
+    }
 }
 
 void PlotWidget::paintEvent(QPaintEvent* event) {
@@ -19,12 +108,13 @@ void PlotWidget::paintEvent(QPaintEvent* event) {
     QPainter painter(this);
     QSize sz = size();
 
-    float apperture = 2.4;      // -1.2 to +1.2
-    scalex_ = static_cast<float>(sz.width()) / apperture;
-    scaley_ = static_cast<float>(sz.height()) / apperture;
-        
+       
     // Improve rendering quality (smooth circles)
     painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(Qt::darkGray);
+    painter.drawText(80, 12, QString("Neurons: %1").arg(HIDDEN_DIM));
+    painter.drawText(80, 24, QString("Epoch: %1").arg(frameCnt_));
+    painter.drawText(80, 36, QString("Seed: %1").arg(seed_, 8, 16));
 
     for (const auto& dot : dots_) {
         if (dot.label) {
@@ -33,22 +123,30 @@ void PlotWidget::paintEvent(QPaintEvent* event) {
             painter.setBrush(Qt::blue);
         }
         painter.setPen(Qt::NoPen);           // No outline
-        painter.drawEllipse(QPoint((dot.x + 1.2)*scalex_, (dot.y + 1.2)*scaley_), 2, 2);
+        painter.drawEllipse(xy2point(dot.x, dot.y), 2, 2);
     }
 
     // go through all pixels to find border:
     painter.setBrush(Qt::black);
     float x, y;
-    float probability;
     QPoint p;
+    float *frame = *std::next(listBorders_.begin(), frameCnt_);
+    float probability;
     for (int w = 0; w < sz.width(); w++) {
         for (int h = 0; h < sz.height(); h++) {
             p = QPoint(w, h);
             point2xy(p, x, y);
+#if 1
+            probability = *frame++;
+#else
             probability = classifier_->forwardPass(x, y);
+#endif
             if (probability > 0.45f && probability < 0.55f) {
-                painter.drawEllipse(QPoint(w,h), 2, 2);
+                painter.drawEllipse(p, 2, 2);
             }
         }
+    }
+    if (++frameCnt_ >= listBorders_.size()) {
+        frameCnt_ = 0;
     }
 }

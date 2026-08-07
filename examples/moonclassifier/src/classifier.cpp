@@ -1,14 +1,13 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
-#include <random>
 #include <algorithm>
 #include "classifier.h"
 
-MoonClassifier::MoonClassifier() {
+MoonClassifier::MoonClassifier(std::mt19937 &gen) {
     // Initialize weights using standard Mersenne Twister and Xavier scaling
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    //std::random_device rd;
+    //std::mt19937 gen(rd());
         
     float scale1 = std::sqrt(2.0f / INPUT_DIM);
     std::normal_distribution<float> dist1(0.0f, scale1);

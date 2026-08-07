@@ -9,7 +9,7 @@
 
 void generate_data_set(std::mt19937 &gen,
                        std::vector<DataPoint> &dataset) {
-    std::uniform_real_distribution<float> dist(-0.2f, 0.2f);
+    std::uniform_real_distribution<float> dist(-IN_DATA_DISTRIBUTION, IN_DATA_DISTRIBUTION);
     DataPoint pmin = {0,0,0};
     DataPoint pmax = {0,0,0};
 
@@ -50,14 +50,24 @@ void generate_data_set(std::mt19937 &gen,
 }
 
 int main(int argc, char *argv[]) {
-    QApplication app(argc, argv);
+    QApplication app(argc, argv);       
 
+    uint32_t seed = 0x11223344;
     std::random_device rd;              // generate random number from hardware
+#if 0
+    seed = rd();
     std::mt19937 gen(rd());             // start high-quility Mersenne Twister math engine (range 32-bits uint32_t)
+#else
+    std::mt19937 gen(seed);
+    //std::mt19937 shuffle_gen(rd());
+#endif
     std::vector<DataPoint> dataset;
-    MoonClassifier *model = new MoonClassifier();
-
     generate_data_set(gen, dataset);
+
+    MoonClassifier *model = new MoonClassifier(gen);
+    PlotWidget plot(dataset, model, seed);
+    plot.setWindowTitle("moonclsr");
+    plot.resize(320, 240);
 
     std::cout << "--- Starting Training Optimization ---" << std::endl;
     // Run training over 20 epochs
@@ -73,11 +83,10 @@ int main(int argc, char *argv[]) {
         for (size_t i = 1; i < dataset.size(); ++i) {
             model->trainStep(dataset[i].x, dataset[i].y, dataset[i].label, false);
         }
+
+        plot.saveEpoch(epoch);
     }
 
-    PlotWidget plot(dataset, model);
-    plot.setWindowTitle("moonclsr");
-    plot.resize(320, 240);
     plot.show();
     app.exec();
     delete model;
