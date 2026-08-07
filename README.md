@@ -13,5 +13,5 @@
 Pure SGD has a high probability of generating a degenerated border, which can be obeserved
 over multiple runs. The Solution is Mini-Batch Gradient Descent method. Skip LeakyReLU.
 
-
+- Add the second layer
 - Mini-Batch Gradient Descent

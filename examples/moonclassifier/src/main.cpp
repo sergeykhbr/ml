@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
 
     uint32_t seed = 0x11223344;
     std::random_device rd;              // generate random number from hardware
-#if 1
+#if 0
     seed = rd();
     std::mt19937 gen(rd());             // start high-quility Mersenne Twister math engine (range 32-bits uint32_t)
 #else

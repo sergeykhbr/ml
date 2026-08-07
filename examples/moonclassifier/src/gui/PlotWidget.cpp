@@ -58,13 +58,15 @@ void PlotWidget::saveEpoch(int epoch) {
     if (!dir.exists()) {
         dir.mkpath(".");
     }
-    QImage img = QImage(width, height, QImage::Format_ARGB32_Premultiplied);
-    drawImage(img, frame);
+    QImage *img = new QImage(width, height, QImage::Format_ARGB32_Premultiplied);
+    drawImage(*img, epoch, frame);
     QString filename = QString("frame_%1.png").arg(epoch, 4, 10, QChar('0'));
     QString fullname = dir.filePath(filename);
-    img.save(fullname);
+    img->save(fullname);
 
-    // img2webp.exe -loop 0 -d 100 frame_*.png -o training_animation.webp
+    listImages_.push_back(img);
+
+    // img2webp -loop 0 -d 200 frame_*.png -o sgd_l1_n4.webp
 }
 
 void PlotWidget::point2xy(QPoint &p, float &x, float &y) {
@@ -83,14 +85,14 @@ void PlotWidget::showEvent(QShowEvent *event) {
     tmr_->start(200);    // ms
 }
 
-void PlotWidget::drawImage(QImage &img, float *frame) {
+void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
     img.fill(Qt::white);
     QPainter painter(&img);
 
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setPen(Qt::darkGray);
     painter.drawText(80, 12, QString("Neurons: %1").arg(HIDDEN_DIM));
-    painter.drawText(80, 24, QString("Epoch: %1").arg(frameCnt_));
+    painter.drawText(80, 24, QString("Epoch: %1").arg(epoch));
     painter.drawText(80, 36, QString("Seed: %1").arg(seed_, 8, 16));
 
     // Draw generated dataset:
@@ -122,46 +124,9 @@ void PlotWidget::drawImage(QImage &img, float *frame) {
 void PlotWidget::paintEvent(QPaintEvent* event) {
     Q_UNUSED(event);
     QPainter painter(this);
-    QSize sz = size();
+    QImage *img = *std::next(listImages_.begin(), frameCnt_);
+    painter.drawImage(0, 0, *img);
 
-       
-    // Improve rendering quality (smooth circles)
-    painter.setRenderHint(QPainter::Antialiasing);
-    painter.setPen(Qt::darkGray);
-    painter.drawText(80, 12, QString("Neurons: %1").arg(HIDDEN_DIM));
-    painter.drawText(80, 24, QString("Epoch: %1").arg(frameCnt_));
-    painter.drawText(80, 36, QString("Seed: %1").arg(seed_, 8, 16));
-
-    for (const auto& dot : dots_) {
-        if (dot.label) {
-            painter.setBrush(Qt::red);
-        } else {
-            painter.setBrush(Qt::blue);
-        }
-        painter.setPen(Qt::NoPen);           // No outline
-        painter.drawEllipse(xy2point(dot.x, dot.y), 2, 2);
-    }
-
-    // go through all pixels to find border:
-    painter.setBrush(Qt::black);
-    float x, y;
-    QPoint p;
-    float *frame = *std::next(listBorders_.begin(), frameCnt_);
-    float probability;
-    for (int w = 0; w < sz.width(); w++) {
-        for (int h = 0; h < sz.height(); h++) {
-            p = QPoint(w, h);
-            point2xy(p, x, y);
-#if 1
-            probability = *frame++;
-#else
-            probability = classifier_->forwardPass(x, y);
-#endif
-            if (probability > 0.45f && probability < 0.55f) {
-                painter.drawEllipse(p, 2, 2);
-            }
-        }
-    }
     if (++frameCnt_ >= listBorders_.size()) {
         frameCnt_ = 0;
     }

@@ -51,12 +51,13 @@ class PlotWidget : public QWidget {
  private:
     void point2xy(QPoint &p, float &x, float &y);
     QPoint xy2point(float x, float y);
-    void drawImage(QImage &img, float *frame);
+    void drawImage(QImage &img, int epoch, float *frame);
 
  private:
     uint32_t seed_;
     const std::vector<DataPoint> &dots_;
     std::list<float *> listBorders_;
+    std::list<QImage *> listImages_;
     MoonClassifier *classifier_;
     QTimer *tmr_;
     float scalex_;
