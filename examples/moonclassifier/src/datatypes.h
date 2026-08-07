@@ -18,9 +18,15 @@
 // Input parameters:
 const float IN_DATA_DISTRIBUTION = 0.2f;
 
+#define LAYER2_ENA
 // Architecture Parameters
 const int INPUT_DIM = 2;   // (x, y) coordinates
+#ifdef LAYER2_ENA
+const int HIDDEN1_DIM = 4;
+const int HIDDEN2_DIM = 4;
+#else
 const int HIDDEN_DIM = 4;  // Tiny layer so we can see every single number
+#endif
 const int OUTPUT_DIM = 2;  // 2 classes: Red (0) or Blue (1)
 
 struct DataPoint {

@@ -92,7 +92,11 @@ void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
 
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setPen(Qt::darkGray);
+#ifdef LAYER2_ENA
+    painter.drawText(80, 12, QString("Neurons: %1 %2").arg(HIDDEN1_DIM).arg(HIDDEN2_DIM));
+#else
     painter.drawText(80, 12, QString("Neurons: %1").arg(HIDDEN_DIM));
+#endif
     painter.drawText(80, 24, QString("Epoch: %1").arg(epoch));
     painter.drawText(80, 36, QString("Seed: %1").arg(seed_, 8, 16));
 
