@@ -49,7 +49,7 @@ class PlotWidget : public QWidget {
     virtual void showEvent(QShowEvent *event) override;
 
  private:
-    void point2xy(QPoint &p, float &x, float &y);
+    void point2xy(QPoint &p, float *xy);
     QPoint xy2point(float x, float y);
     void drawImage(QImage &img, int epoch, float *frame);
 

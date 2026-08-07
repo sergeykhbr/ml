@@ -69,13 +69,12 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);       
 
     uint32_t seed = 0x11223344;
-    std::random_device rd;              // generate random number from hardware
 #if 0
+    std::random_device rd;              // generate random number from hardware
     seed = rd();
     std::mt19937 gen(rd());             // start high-quility Mersenne Twister math engine (range 32-bits uint32_t)
 #else
     std::mt19937 gen(seed);
-    //std::mt19937 shuffle_gen(rd());
 #endif
     std::vector<DataPoint> dataset;
     generate_data_set(gen, dataset);
@@ -93,11 +92,11 @@ int main(int argc, char *argv[]) {
         
         std::cout << "\n--- Epoch " << epoch << " ---" << std::endl;
         // Print the math state for the first point of the epoch to track progression
-        model->trainStep(dataset[0].x, dataset[0].y, dataset[0].label, true);
+        model->trainStep(&dataset[0]);
 
         // Train silently on the rest of the points
         for (size_t i = 1; i < dataset.size(); ++i) {
-            model->trainStep(dataset[i].x, dataset[i].y, dataset[i].label, false);
+            model->trainStep(&dataset[i]);
         }
 
         plot.saveEpoch(epoch);

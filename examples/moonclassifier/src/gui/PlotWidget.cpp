@@ -39,15 +39,16 @@ void PlotWidget::saveEpoch(int epoch) {
     scalex_ = static_cast<float>(width) / apperture;
     scaley_ = static_cast<float>(height) / apperture;
 
-    float x, y;
+    float IN[INPUT_DIM];
+    float OUT[OUTPUT_DIM];
     QPoint p;
     float *frame = new float [width * height];
     float *probability = frame;
     for (int w = 0; w < width; w++) {
         for (int h = 0; h < height; h++) {
             p = QPoint(w, h);
-            point2xy(p, x, y);
-            *probability = classifier_->forwardPass(x, y);
+            point2xy(p, IN);
+            *probability = classifier_->forwardPass(IN, OUT);
             probability++;
         }
     }
@@ -69,9 +70,9 @@ void PlotWidget::saveEpoch(int epoch) {
     // img2webp -loop 0 -d 200 frame_*.png -o sgd_l1_n4.webp
 }
 
-void PlotWidget::point2xy(QPoint &p, float &x, float &y) {
-    x = (p.x() / scalex_) - (1.0f + IN_DATA_DISTRIBUTION);
-    y = (p.y() / scaley_) - (1.0f + IN_DATA_DISTRIBUTION);
+void PlotWidget::point2xy(QPoint &p, float *xy) {
+    xy[0] = (p.x() / scalex_) - (1.0f + IN_DATA_DISTRIBUTION);
+    xy[1] = (p.y() / scaley_) - (1.0f + IN_DATA_DISTRIBUTION);
 }
 
 QPoint PlotWidget::xy2point(float x, float y) {

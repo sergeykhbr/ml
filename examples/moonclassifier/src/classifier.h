@@ -16,29 +16,26 @@
 
 #pragma once
 
+#include <datatypes.h>
 #include <random>
-
-// Input parameters:
-const float IN_DATA_DISTRIBUTION = 0.2f;
-
-// Architecture Parameters
-const int INPUT_DIM = 2;   // (x, y) coordinates
-const int HIDDEN_DIM = 4;  // Tiny layer so we can see every single number
-const int OUTPUT_DIM = 2;  // 2 classes: Red (0) or Blue (1)
 
 class MoonClassifier {
  public:
     explicit MoonClassifier(std::mt19937 &gen);
 
-    void trainStep(float x_val, float y_val, int target_label, bool print_debug);
-    float forwardPass(float x, float y);
+    void trainStep(DataPoint *datapoint);
+    float forwardPass(float *IN, float *OUT);
 
  private:
     // Model Parameters (Weights and Biases flattened into 1D memory)
     float W1[INPUT_DIM * HIDDEN_DIM];
     float B1[HIDDEN_DIM];
+    float Z1[HIDDEN_DIM];   // Hidden Layer: Z1 = IN * W1 + B1
+    float A1[HIDDEN_DIM];   // Activation: A1 = ReLU(Z1)
+
     float W2[HIDDEN_DIM * OUTPUT_DIM];
     float B2[OUTPUT_DIM];
+    float Z2[OUTPUT_DIM];   // Output Layer: Z2 = A1 * W2 + B2
 
     float learning_rate = 0.05f;
 

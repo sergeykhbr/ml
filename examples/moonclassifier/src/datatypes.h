@@ -15,9 +15,16 @@
  */
 
 #pragma once
+// Input parameters:
+const float IN_DATA_DISTRIBUTION = 0.2f;
+
+// Architecture Parameters
+const int INPUT_DIM = 2;   // (x, y) coordinates
+const int HIDDEN_DIM = 4;  // Tiny layer so we can see every single number
+const int OUTPUT_DIM = 2;  // 2 classes: Red (0) or Blue (1)
 
 struct DataPoint {
     float x;
     float y;
-    int label; // 0 for Red, 1 for Blue
+    int label; // INPUT_DIM: 0 for Red, 1 for Blue
 };
