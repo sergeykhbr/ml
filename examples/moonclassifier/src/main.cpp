@@ -68,13 +68,14 @@ void generate_data_set(std::mt19937 &gen,
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);       
 
-    uint32_t seed = 0x11223344;
-#if 0
+    uint32_t seed;
+#ifdef FIXED_SEED
+    seed = FIXED_SEED;
+    std::mt19937 gen(seed);
+#else
     std::random_device rd;              // generate random number from hardware
     seed = rd();
     std::mt19937 gen(rd());             // start high-quility Mersenne Twister math engine (range 32-bits uint32_t)
-#else
-    std::mt19937 gen(seed);
 #endif
     std::vector<DataPoint> dataset;
     generate_data_set(gen, dataset);
@@ -86,7 +87,7 @@ int main(int argc, char *argv[]) {
 
     std::cout << "--- Starting Training Optimization ---" << std::endl;
     // Run training over 20 epochs
-    for (int epoch = 1; epoch <= 20; ++epoch) {
+    for (int epoch = 1; epoch <= TRAIN_EPOCH_TOTAL; ++epoch) {
         // Shuffle the tracking points each epoch to maintain optimization stability
         std::shuffle(dataset.begin(), dataset.end(), gen);
         

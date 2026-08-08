@@ -16,9 +16,14 @@
 
 #pragma once
 // Input parameters:
+const int TRAIN_EPOCH_TOTAL = 100;
 const float IN_DATA_DISTRIBUTION = 0.2f;
 
-//#define LAYER2_ENA
+#define FIXED_SEED 0x11223344
+#define LAYER2_ENA
+#define SIGMOID_ENA
+
+
 // Architecture Parameters
 const int INPUT_DIM = 2;   // (x, y) coordinates
 #ifdef LAYER2_ENA

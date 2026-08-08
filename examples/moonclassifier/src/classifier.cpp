@@ -92,14 +92,39 @@ void MoonClassifier::backwardLayer(float *dIN, int isz,
         for (int j = 0; j < isz; ++j) {
             error += dIN[j] * W[i * isz + j]; 
         }
-        dOUT[i] = (OUT[i] > 0.0f) ? error : 0.0f; 
+#ifdef SIGMOID_ENA
+        dOUT[i] = error * derivativeSigmoid(OUT[i]);
+#else
+        dOUT[i] = error * derivativeReLU(OUT[i]);
+#endif
     }
 }
 
+float MoonClassifier::ReLU(float IN) {
+    return std::max(0.0f, IN);
+}
+
+float MoonClassifier::derivativeReLU(float IN) {
+    return IN > 0.0f ? 1.0f : 0.0f;
+}
+
+float MoonClassifier::Sigmoid(float IN) {
+    return 1.0f / (1.0f + std::exp(-IN));
+}
+
+float MoonClassifier::derivativeSigmoid(float IN) {
+    float act = Sigmoid(IN);
+    return act * (1.0f - act);
+}
+
+
 void MoonClassifier::activation(float *IN, float *OUT, int sz) {
-    // OUT = ReLU(IN)
     for (int i = 0; i < sz; ++i) {
-        OUT[i] = std::max(0.0f, IN[i]);
+#ifdef SIGMOID_ENA
+        OUT[i] = Sigmoid(IN[i]);
+#else
+        OUT[i] = ReLU(IN[i]);
+#endif
     }
 }
 
@@ -256,14 +281,6 @@ void MoonClassifier::trainStep(DataPoint *datapoint) {
     float dZ1[HIDDEN_DIM] = {0.0f};
     backwardLayer(dZ2, OUTPUT_DIM, Z1, dZ1, HIDDEN_DIM, W2);
 
-    /*float dZ1[HIDDEN_DIM] = {0.0f};
-    for (int i = 0; i < HIDDEN_DIM; ++i) {
-        float error = 0.0f;
-        for (int j = 0; j < OUTPUT_DIM; ++j) {
-            error += dZ2[j] * W2[i * OUTPUT_DIM + j]; // Transposed matrix index
-        }
-        dZ1[i] = (Z1[i] > 0.0f) ? error : 0.0f; // ReLU derivative
-    }*/
 
     // 3. GRADIENT DESCENT PARAMETER UPDATES
     // Update W2 and B2

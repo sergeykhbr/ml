@@ -110,9 +110,6 @@ void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
             probability = *frame++;
             painter.setPen(probability2color(probability));
             painter.drawPoint(p);
-            //if (probability > 0.45f && probability < 0.55f) {
-            //    painter.drawEllipse(p, 2, 2);
-            //}
         }
     }
 

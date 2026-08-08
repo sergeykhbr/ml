@@ -25,6 +25,10 @@ class MoonClassifier {
 
     void trainStep(DataPoint *datapoint);
     void forwardLayer(float *IN, int isz, float *OUT, int osz, float *W, float *B);
+    float ReLU(float IN);
+    float derivativeReLU(float IN);
+    float Sigmoid(float IN);
+    float derivativeSigmoid(float IN);
     void activation(float *IN, float *OUT, int sz);
     void activationSoftmax(float *IN, float *OUT, int sz);
     float forwardPass(float *IN, float *OUT);
