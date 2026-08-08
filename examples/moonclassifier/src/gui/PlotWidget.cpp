@@ -52,7 +52,6 @@ void PlotWidget::saveEpoch(int epoch) {
             probability++;
         }
     }
-    listBorders_.push_back(frame);
 
     // save image:
     QDir dir(tr("screenshots"));
@@ -66,6 +65,7 @@ void PlotWidget::saveEpoch(int epoch) {
     img->save(fullname);
 
     listImages_.push_back(img);
+    delete [] frame;
 
     // img2webp -loop 0 -d 200 frame_*.png -o sgd_l1_n4.webp
 }
@@ -86,14 +86,39 @@ void PlotWidget::showEvent(QShowEvent *event) {
     tmr_->start(200);    // ms
 }
 
+QColor probability2color(float p) {
+    p = std::max(0.0f, std::min(1.0f, p));
+    int g = 0;
+    int r = static_cast<int>(139.0f * p);
+    int b = static_cast<int>(139.0f * (1.0f -  p));
+    return QColor(qRgb(r, g, b));
+}
+
 void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
     img.fill(Qt::white);
     QPainter painter(&img);
 
     painter.setRenderHint(QPainter::Antialiasing);
+
+    // go through all pixels to find border:
+    painter.setBrush(Qt::black);
+    QPoint p;
+    float probability;
+    for (int w = 0; w < img.width(); w++) {
+        for (int h = 0; h < img.height(); h++) {
+            p = QPoint(w, h);
+            probability = *frame++;
+            painter.setPen(probability2color(probability));
+            painter.drawPoint(p);
+            //if (probability > 0.45f && probability < 0.55f) {
+            //    painter.drawEllipse(p, 2, 2);
+            //}
+        }
+    }
+
     painter.setPen(Qt::darkGray);
 #ifdef LAYER2_ENA
-    painter.drawText(80, 12, QString("Neurons: %1 %2").arg(HIDDEN1_DIM).arg(HIDDEN2_DIM));
+    painter.drawText(80, 12, QString("Neurons: %1:%2").arg(HIDDEN1_DIM).arg(HIDDEN2_DIM));
 #else
     painter.drawText(80, 12, QString("Neurons: %1").arg(HIDDEN_DIM));
 #endif
@@ -110,20 +135,6 @@ void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
         }
         painter.drawEllipse(xy2point(dot.x, dot.y), 2, 2);
     }
-
-    // go through all pixels to find border:
-    painter.setBrush(Qt::black);
-    QPoint p;
-    float probability;
-    for (int w = 0; w < img.width(); w++) {
-        for (int h = 0; h < img.height(); h++) {
-            p = QPoint(w, h);
-            probability = *frame++;
-            if (probability > 0.45f && probability < 0.55f) {
-                painter.drawEllipse(p, 2, 2);
-            }
-        }
-    }
 }
 
 void PlotWidget::paintEvent(QPaintEvent* event) {
@@ -132,7 +143,7 @@ void PlotWidget::paintEvent(QPaintEvent* event) {
     QImage *img = *std::next(listImages_.begin(), frameCnt_);
     painter.drawImage(0, 0, *img);
 
-    if (++frameCnt_ >= listBorders_.size()) {
+    if (++frameCnt_ >= listImages_.size()) {
         frameCnt_ = 0;
     }
 }

@@ -16,10 +16,10 @@ over multiple runs. The Solution is Mini-Batch Gradient Descent method. Skip Lea
 - Add the second layer
 
 <p align="center">
+  <img src="docs/pics/sgd_l1_n4_grad.webp" />
   <img src="docs/pics/sgd_l2_n4x4.webp" />
 </p>
 
-Need to add regions coloring to see increased higher "probability contrast" with
-the 2 layers model.
+The second layer increases "probability contrast".
 
 - Mini-Batch Gradient Descent
