@@ -16,23 +16,17 @@
 
 #pragma once
 // Input parameters:
-const int TRAIN_EPOCH_TOTAL = 100;
+const int TRAIN_EPOCH_TOTAL = 20;
 const float IN_DATA_DISTRIBUTION = 0.2f;
 
 #define FIXED_SEED 0x11223344
-#define LAYER2_ENA
-#define SIGMOID_ENA
-
+//#define SIGMOID_ENA
 
 // Architecture Parameters
 const int INPUT_DIM = 2;   // (x, y) coordinates
-#ifdef LAYER2_ENA
-const int HIDDEN1_DIM = 4;
-const int HIDDEN2_DIM = 4;
-#else
-const int HIDDEN_DIM = 4;  // Tiny layer so we can see every single number
-#endif
 const int OUTPUT_DIM = 2;  // 2 classes: Red (0) or Blue (1)
+const int LAYER_DIM[] = {4, 4};
+const int LAYER_NUM = sizeof(LAYER_DIM)/sizeof(int);    // hidden layers count (min = 1)
 
 struct DataPoint {
     float x;

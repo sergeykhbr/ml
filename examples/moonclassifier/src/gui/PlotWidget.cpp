@@ -114,11 +114,11 @@ void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
     }
 
     painter.setPen(Qt::darkGray);
-#ifdef LAYER2_ENA
-    painter.drawText(80, 12, QString("Neurons: %1:%2").arg(HIDDEN1_DIM).arg(HIDDEN2_DIM));
-#else
-    painter.drawText(80, 12, QString("Neurons: %1").arg(HIDDEN_DIM));
-#endif
+    QString neurons = QString("Neurons: %1").arg(LAYER_DIM[0]);
+    for (int i = 1; i < LAYER_NUM; i++) {
+        neurons += QString(":%1").arg(LAYER_DIM[i]);
+    }
+    painter.drawText(80, 12, neurons);
     painter.drawText(80, 24, QString("Epoch: %1").arg(epoch));
     painter.drawText(80, 36, QString("Seed: %1").arg(seed_, 8, 16));
 

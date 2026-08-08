@@ -21,52 +21,54 @@
 #include "classifier.h"
 
 MoonClassifier::MoonClassifier(std::mt19937 &gen) {
-#ifdef LAYER2_ENA
-    float scale1 = std::sqrt(2.0f / INPUT_DIM);
-    std::normal_distribution<float> dist1(0.0f, scale1);
-    for (int i = 0; i < INPUT_DIM * HIDDEN1_DIM; ++i) {
-        W1[i] = dist1(gen);
-    }
-    for (int i = 0; i < HIDDEN1_DIM; ++i) {
-        B1[i] = 0.0f;
-    }
+    int InDim = INPUT_DIM;
+    for (int i = 0; i < LAYER_NUM; i++) {
+        LayerData_[i].W = new float [InDim * LAYER_DIM[i]];
+        LayerData_[i].B = new float [LAYER_DIM[i]];
+        LayerData_[i].Z = new float [LAYER_DIM[i]];
+        LayerData_[i].A = new float [LAYER_DIM[i]];
+        LayerData_[i].dZ = new float [LAYER_DIM[i]];
 
-    float scale2 = std::sqrt(2.0f / HIDDEN1_DIM);
-    std::normal_distribution<float> dist2(0.0f, scale2);
-    for (int i = 0; i < HIDDEN1_DIM * HIDDEN2_DIM; ++i) {
-        W2[i] = dist2(gen);
-    }
-    for (int i = 0; i < HIDDEN2_DIM; ++i) {
-        B2[i] = 0.0f;
-    }
+        float scale = std::sqrt(2.0f / InDim);
+        std::normal_distribution<float> dist(0.0f, scale);
+        for (int ii = 0; ii < InDim * LAYER_DIM[i]; ++ii) {
+            LayerData_[i].W[ii] = dist(gen);
+        }
+        for (int ii = 0; ii < LAYER_DIM[i]; ++ii) {
+            LayerData_[i].B[ii] = 0.0f;
+        }
 
-    float scale3 = std::sqrt(2.0f / HIDDEN2_DIM);
-    std::normal_distribution<float> dist3(0.0f, scale3);
-    for (int i = 0; i < HIDDEN2_DIM * OUTPUT_DIM; ++i) {
-        W3[i] = dist3(gen);
+        InDim = LAYER_DIM[i];
     }
-    for (int i = 0; i < OUTPUT_DIM; ++i) {
-        B3[i] = 0.0f;
-    }
-#else
-    float scale1 = std::sqrt(2.0f / INPUT_DIM);
-    std::normal_distribution<float> dist1(0.0f, scale1);
-    for (int i = 0; i < INPUT_DIM * HIDDEN_DIM; ++i) {
-        W1[i] = dist1(gen);
-    }
-    for (int i = 0; i < HIDDEN_DIM; ++i) {
-        B1[i] = 0.0f;
-    }
+    OutputData_.W = new float [InDim * OUTPUT_DIM];
+    OutputData_.B = new float [OUTPUT_DIM];
+    OutputData_.Z = new float [OUTPUT_DIM];
+    OutputData_.A = new float [OUTPUT_DIM];
+    OutputData_.dZ = new float [OUTPUT_DIM];
 
-    float scale2 = std::sqrt(2.0f / HIDDEN_DIM);
-    std::normal_distribution<float> dist2(0.0f, scale2);
-    for (int i = 0; i < HIDDEN_DIM * OUTPUT_DIM; ++i) {
-        W2[i] = dist2(gen);
+    float scale = std::sqrt(2.0f / InDim);
+    std::normal_distribution<float> dist(0.0f, scale);
+    for (int ii = 0; ii < InDim * OUTPUT_DIM; ++ii) {
+        OutputData_.W[ii] = dist(gen);
     }
-    for (int i = 0; i < OUTPUT_DIM; ++i) {
-        B2[i] = 0.0f;
+    for (int ii = 0; ii < OUTPUT_DIM; ++ii) {
+        OutputData_.B[ii] = 0.0f;
     }
-#endif
+}
+
+MoonClassifier::~MoonClassifier() {
+    for (int i = 0; i < LAYER_NUM; i++) {
+        delete [] LayerData_[i].W;
+        delete [] LayerData_[i].B;
+        delete [] LayerData_[i].Z;
+        delete [] LayerData_[i].A;
+        delete [] LayerData_[i].dZ;
+    }
+    delete [] OutputData_.W;
+    delete [] OutputData_.B;
+    delete [] OutputData_.Z;
+    delete [] OutputData_.A;
+    delete [] OutputData_.dZ;
 }
 
 // OUT = IN * W1 + B1
@@ -143,87 +145,50 @@ void MoonClassifier::activationSoftmax(float *IN, float *OUT, int sz) {
 }
 
 float MoonClassifier::forwardPass(float *IN, float *OUT) {
-#ifdef LAYER2_ENA
-    forwardLayer(IN, INPUT_DIM,
-                 Z1, HIDDEN1_DIM,
-                 W1,
-                 B1);
-    activation(Z1, A1, HIDDEN1_DIM);
+    LayerDataType *layer;
+    int InDim = INPUT_DIM;
+    for (int i = 0; i < LAYER_NUM; i++) {
+        layer = &LayerData_[i];
+        forwardLayer(IN, InDim,
+                     layer->Z, LAYER_DIM[i],
+                     layer->W,
+                     layer->B);
+        activation(layer->Z, layer->A, LAYER_DIM[i]);
 
-    forwardLayer(A1, HIDDEN1_DIM,
-                 Z2, HIDDEN2_DIM,
-                 W2,
-                 B2);
-    activation(Z2, A2, HIDDEN2_DIM);
-
-    forwardLayer(A2, HIDDEN2_DIM,
-                 Z3, OUTPUT_DIM,
-                 W3,
-                 B3);
-    activationSoftmax(Z3, OUT, OUTPUT_DIM);
-#else
-    forwardLayer(IN, INPUT_DIM,
-                 Z1, HIDDEN_DIM,
-                 W1,
-                 B1);
-    activation(Z1, A1, HIDDEN_DIM);
-
-    forwardLayer(A1, HIDDEN_DIM,
-                 Z2, OUTPUT_DIM,
-                 W2,
-                 B2);
-    activationSoftmax(Z2, OUT, OUTPUT_DIM);
-    /*
-    // Hidden Layer: Z1 = X * W1 + B1
-    for (int j = 0; j < HIDDEN_DIM; ++j) {
-        Z1[j] = 0.0f;
-        for (int i = 0; i < INPUT_DIM; ++i) {
-            Z1[j] += IN[i] * W1[i * HIDDEN_DIM + j];
-        }
-        Z1[j] += B1[j];
+        IN = layer->A;
+        InDim = LAYER_DIM[i];
     }
-
-    // Activation: A1 = ReLU(Z1)
-    for (int i = 0; i < HIDDEN_DIM; ++i) {
-        A1[i] = std::max(0.0f, Z1[i]);
-    }
-
-    // Output Layer: Z2 = A1 * W2 + B2
-    for (int j = 0; j < OUTPUT_DIM; ++j) {
-        Z2[j] = 0.0f;
-        for (int i = 0; i < HIDDEN_DIM; ++i) {
-            Z2[j] += A1[i] * W2[i * OUTPUT_DIM + j];
-        }
-        Z2[j] += B2[j];
-    }
-
-    // Activation: A2 = Softmax(Z2)
-    float max_z = std::max(Z2[0], Z2[1]);       // Stability trick
-    float sum_exp = std::exp(Z2[0] - max_z) + std::exp(Z2[1] - max_z);
-    OUT[0] = std::exp(Z2[0] - max_z) / sum_exp;
-    OUT[1] = std::exp(Z2[1] - max_z) / sum_exp;  // probability
-    */
-#endif
+    forwardLayer(IN, InDim,
+                OutputData_.Z, OUTPUT_DIM,
+                OutputData_.W,
+                OutputData_.B);
+    activationSoftmax(OutputData_.Z, OUT, OUTPUT_DIM);
 
     return OUT[1];
+}
+
+void MoonClassifier::gradientDescent(float *dIN, int isz,
+                                     float *OUT, int osz,
+                                     float *W,
+                                     float *B) {
+    for (int i = 0; i < osz; ++i) {
+        for (int j = 0; j < isz; ++j) {
+            W[i * isz + j] -= learning_rate * (OUT[i] * dIN[j]);
+        }
+    }
+    for (int i = 0; i < isz; i++) {
+        B[i] -= learning_rate * dIN[i];
+    }
+
 }
 
 void MoonClassifier::trainStep(DataPoint *datapoint) {
     // --- 1. FORWARD PASS ---
     float X[INPUT_DIM] = {datapoint->x, datapoint->y};
-#ifdef LAYER2_ENA
-    float A3[OUTPUT_DIM];
 
-    forwardPass(X, A3);
+    forwardPass(X, OutputData_.A);
     // Calculate loss for tracking: Cross-Entropy = -sum(Y * log(A3))
-    float loss = -std::log(std::max(A3[datapoint->label], 1e-7f));
-#else
-    float A2[OUTPUT_DIM];
-
-    forwardPass(X, A2);
-    // Calculate loss for tracking: Cross-Entropy = -sum(Y * log(A2))
-    float loss = -std::log(std::max(A2[datapoint->label], 1e-7f));
-#endif
+    float loss = -std::log(std::max(OutputData_.A[datapoint->label], 1e-7f));
 
     // Calculate Target Vector Y (One-hot mapping)
     float Y[OUTPUT_DIM] = {0.0f};
@@ -231,76 +196,27 @@ void MoonClassifier::trainStep(DataPoint *datapoint) {
 
 
     // 2. BACKWARD PASS
-#ifdef LAYER2_ENA
-    float dZ3[OUTPUT_DIM];
     for (int i = 0; i < OUTPUT_DIM; i++) {
-        dZ3[i] = A3[i] - Y[i];
+        OutputData_.dZ[i] = OutputData_.A[i] - Y[i];
     }
 
-    float dZ2[HIDDEN2_DIM];
-    backwardLayer(dZ3, OUTPUT_DIM, Z2, dZ2, HIDDEN2_DIM, W3);
+    LayerDataType *layer = &OutputData_;
+    int OutDim = OUTPUT_DIM;
+    for (int i = LAYER_NUM - 1; i >= 0; i--) {
+        backwardLayer(layer->dZ, OutDim,
+                      LayerData_[i].Z, LayerData_[i].dZ, LAYER_DIM[i],
+                      layer->W);
+        gradientDescent(layer->dZ, OutDim,
+                        LayerData_[i].A, LAYER_DIM[i],
+                        layer->W,
+                        layer->B);
+        layer = &LayerData_[i];
+        OutDim = LAYER_DIM[i];
+    }
+    gradientDescent(layer->dZ, OutDim,
+                    X, INPUT_DIM,
+                    layer->W,
+                    layer->B);
 
-    float dZ1[HIDDEN1_DIM];
-    backwardLayer(dZ2, HIDDEN2_DIM, Z1, dZ1, HIDDEN1_DIM, W2);
-
-    // 3. GRADIENT DESCENT PARAMETER UPDATES
-    for (int i = 0; i < HIDDEN2_DIM; ++i) {
-        for (int j = 0; j < OUTPUT_DIM; ++j) {
-            W3[i * OUTPUT_DIM + j] -= learning_rate * (A2[i] * dZ3[j]);
-        }
-    }
-    for (int i = 0; i < OUTPUT_DIM; i++) {
-        B3[i] -= learning_rate * dZ3[i];
-    }
-
-    for (int i = 0; i < HIDDEN1_DIM; ++i) {
-        for (int j = 0; j < HIDDEN2_DIM; ++j) {
-            W2[i * HIDDEN2_DIM + j] -= learning_rate * (A1[i] * dZ2[j]);
-        }
-    }
-    for (int j = 0; j < HIDDEN2_DIM; ++j) {
-        B2[j] -= learning_rate * dZ2[j];
-    }
-
-    for (int i = 0; i < INPUT_DIM; ++i) {
-        for (int j = 0; j < HIDDEN1_DIM; ++j) {
-            W1[i * HIDDEN1_DIM + j] -= learning_rate * (X[i] * dZ1[j]);
-        }
-    }
-    for (int j = 0; j < HIDDEN1_DIM; ++j) {
-        B1[j] -= learning_rate * dZ1[j];
-    }
-#else
-    // Error at output layer: dZ2 = A2 - Y
-    float dZ2[OUTPUT_DIM];
-    for (int i = 0; i < OUTPUT_DIM; i++) {
-        dZ2[i] = A2[i] - Y[i];
-    }
-
-    // Error at hidden layer: dZ1 = (dZ2 * W2^T) * ReLU_derivative(Z1)
-    float dZ1[HIDDEN_DIM] = {0.0f};
-    backwardLayer(dZ2, OUTPUT_DIM, Z1, dZ1, HIDDEN_DIM, W2);
-
-
-    // 3. GRADIENT DESCENT PARAMETER UPDATES
-    // Update W2 and B2
-    for (int i = 0; i < HIDDEN_DIM; ++i) {
-        for (int j = 0; j < OUTPUT_DIM; ++j) {
-            W2[i * OUTPUT_DIM + j] -= learning_rate * (A1[i] * dZ2[j]);
-        }
-    }
-    B2[0] -= learning_rate * dZ2[0];
-    B2[1] -= learning_rate * dZ2[1];
-
-    // Update W1 and B1
-    for (int i = 0; i < INPUT_DIM; ++i) {
-        for (int j = 0; j < HIDDEN_DIM; ++j) {
-            W1[i * HIDDEN_DIM + j] -= learning_rate * (X[i] * dZ1[j]);
-        }
-    }
-    for (int j = 0; j < HIDDEN_DIM; ++j) {
-        B1[j] -= learning_rate * dZ1[j];
-    }
-#endif
 }
 
