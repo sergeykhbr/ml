@@ -23,8 +23,12 @@
 MoonClassifier::MoonClassifier(std::mt19937 &gen) {
     int InDim = INPUT_DIM;
     for (int i = 0; i < LAYER_NUM; i++) {
+        LayerData_[i].prevdim = InDim;
+        LayerData_[i].dim = LAYER_DIM[i];
         LayerData_[i].W = new float [InDim * LAYER_DIM[i]];
+        LayerData_[i].batchW = new float [InDim * LAYER_DIM[i]];
         LayerData_[i].B = new float [LAYER_DIM[i]];
+        LayerData_[i].batchB = new float [LAYER_DIM[i]];
         LayerData_[i].Z = new float [LAYER_DIM[i]];
         LayerData_[i].A = new float [LAYER_DIM[i]];
         LayerData_[i].dZ = new float [LAYER_DIM[i]];
@@ -33,15 +37,21 @@ MoonClassifier::MoonClassifier(std::mt19937 &gen) {
         std::normal_distribution<float> dist(0.0f, scale);
         for (int ii = 0; ii < InDim * LAYER_DIM[i]; ++ii) {
             LayerData_[i].W[ii] = dist(gen);
+            LayerData_[i].batchW[ii] = 0.0f;
         }
         for (int ii = 0; ii < LAYER_DIM[i]; ++ii) {
             LayerData_[i].B[ii] = 0.0f;
+            LayerData_[i].batchB[ii] = 0.0f;
         }
 
         InDim = LAYER_DIM[i];
     }
+    OutputData_.prevdim = InDim;
+    OutputData_.dim = OUTPUT_DIM;
     OutputData_.W = new float [InDim * OUTPUT_DIM];
+    OutputData_.batchW = new float [InDim * OUTPUT_DIM];
     OutputData_.B = new float [OUTPUT_DIM];
+    OutputData_.batchB = new float [OUTPUT_DIM];
     OutputData_.Z = new float [OUTPUT_DIM];
     OutputData_.A = new float [OUTPUT_DIM];
     OutputData_.dZ = new float [OUTPUT_DIM];
@@ -50,10 +60,13 @@ MoonClassifier::MoonClassifier(std::mt19937 &gen) {
     std::normal_distribution<float> dist(0.0f, scale);
     for (int ii = 0; ii < InDim * OUTPUT_DIM; ++ii) {
         OutputData_.W[ii] = dist(gen);
+        OutputData_.batchW[ii] = 0.0f;
     }
     for (int ii = 0; ii < OUTPUT_DIM; ++ii) {
         OutputData_.B[ii] = 0.0f;
+        OutputData_.batchB[ii] = 0.0f;
     }
+    batchCnt_ = 0;
 }
 
 MoonClassifier::~MoonClassifier() {
@@ -85,19 +98,19 @@ void MoonClassifier::forwardLayer(float *IN, int isz,
     }
 }
 
-void MoonClassifier::backwardLayer(float *dIN, int isz,
-                                   float *OUT, float *dOUT, int osz,
-                                   float *W) {
+void MoonClassifier::backwardLayer(float *dZ, int sz,                   // Layer[n]
+                                   float *Zprv, float *dZprv, int prvsz,// Layer[n-1]
+                                   float *W) {                          // Layer[n]
     // Error at hidden layer: dOUT = (dIN * W^T) * ReLU_derivative(OUT)
-    for (int i = 0; i < osz; ++i) {
+    for (int i = 0; i < prvsz; ++i) {
         float error = 0.0f;
-        for (int j = 0; j < isz; ++j) {
-            error += dIN[j] * W[i * isz + j]; 
+        for (int j = 0; j < sz; ++j) {
+            error += dZ[j] * W[i * sz + j]; 
         }
 #ifdef SIGMOID_ENA
-        dOUT[i] = error * derivativeSigmoid(OUT[i]);
+        dZprv[i] = error * derivativeSigmoid(Zprv[i]);
 #else
-        dOUT[i] = error * derivativeReLU(OUT[i]);
+        dZprv[i] = error * derivativeReLU(Zprv[i]);
 #endif
     }
 }
@@ -167,19 +180,35 @@ float MoonClassifier::forwardPass(float *IN, float *OUT) {
     return OUT[1];
 }
 
-void MoonClassifier::gradientDescent(float *dIN, int isz,
-                                     float *OUT, int osz,
-                                     float *W,
-                                     float *B) {
-    for (int i = 0; i < osz; ++i) {
-        for (int j = 0; j < isz; ++j) {
-            W[i * isz + j] -= learning_rate * (OUT[i] * dIN[j]);
+void MoonClassifier::gradientDescent(float *dZ, int sz,   // Layer[n]
+                                     float *Aprv, int prvsz,     // Layer[n-1]
+                                     float *W,              // Layer[n]
+                                     float *B) {            // Layer[n]
+    for (int i = 0; i < prvsz; ++i) {
+        for (int j = 0; j < sz; ++j) {
+            W[i * sz + j] -= (Aprv[i] * dZ[j]);
         }
     }
-    for (int i = 0; i < isz; i++) {
-        B[i] -= learning_rate * dIN[i];
+    for (int i = 0; i < sz; i++) {
+        B[i] -= dZ[i];
     }
+}
 
+void MoonClassifier::batchIncrement(int batchSize,
+                                    float learning_rate,
+                                    LayerDataType *layer) {
+    //float w1 = 0;
+    for (int i = 0; i < layer->prevdim * layer->dim; i++) {
+        layer->W[i] += learning_rate * (layer->batchW[i] / batchSize);
+        //w1 += learning_rate * (layer->batchW[i] / batchSize);
+    }
+    //float b1 = 0;
+    for (int i = 0; i < layer->dim; i++) {
+        layer->B[i] += learning_rate * (layer->batchB[i] / batchSize);
+        //b1 += learning_rate * (layer->batchB[i] / batchSize);
+    }
+    memset(layer->batchW, 0, layer->prevdim * layer->dim * sizeof(float));
+    memset(layer->batchB, 0, layer->dim * sizeof(float));
 }
 
 void MoonClassifier::trainStep(DataPoint *datapoint) {
@@ -201,22 +230,30 @@ void MoonClassifier::trainStep(DataPoint *datapoint) {
     }
 
     LayerDataType *layer = &OutputData_;
-    int OutDim = OUTPUT_DIM;
+    int LayerDim = OUTPUT_DIM;
     for (int i = LAYER_NUM - 1; i >= 0; i--) {
-        backwardLayer(layer->dZ, OutDim,
+        backwardLayer(layer->dZ, LayerDim,
                       LayerData_[i].Z, LayerData_[i].dZ, LAYER_DIM[i],
                       layer->W);
-        gradientDescent(layer->dZ, OutDim,
+        gradientDescent(layer->dZ, LayerDim,
                         LayerData_[i].A, LAYER_DIM[i],
-                        layer->W,
-                        layer->B);
+                        layer->batchW,
+                        layer->batchB);
         layer = &LayerData_[i];
-        OutDim = LAYER_DIM[i];
+        LayerDim = LAYER_DIM[i];
     }
-    gradientDescent(layer->dZ, OutDim,
+    gradientDescent(layer->dZ, LayerDim,
                     X, INPUT_DIM,
-                    layer->W,
-                    layer->B);
+                    layer->batchW,
+                    layer->batchB);
 
+
+    if (++batchCnt_ >= MINI_BATCH_SIZE) {
+        batchIncrement(batchCnt_, LEARNING_RATE, &OutputData_);
+        for (int i = LAYER_NUM - 1; i >= 0; i--) {
+            batchIncrement(batchCnt_, LEARNING_RATE, &LayerData_[i]);
+        }
+        batchCnt_ = 0;
+    }
 }
 

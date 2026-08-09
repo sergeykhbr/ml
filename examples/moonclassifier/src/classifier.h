@@ -34,20 +34,15 @@ class MoonClassifier {
     void activationSoftmax(float *IN, float *OUT, int sz);
     float forwardPass(float *IN, float *OUT);
     void backwardLayer(float *dIN, int isz, float *OUT, float *dOUT, int osz, float *W);
-    void gradientDescent(float *dIN, int isz, float *OUT, int osz, float *W, float *B);
+    void gradientDescent(float *dZ, int dZsz,
+                         float *A, int Asz,
+                         float *W,
+                         float *B);
+    void batchIncrement(int batchSize, float learning_rate, LayerDataType *layer);
 
  private:
-    // Model Parameters (Weights and Biases flattened into 1D memory)
-    struct LayerDataType {
-        float *W;   // Weight
-        float *B;   // Bias
-        float *Z;   // Hidden Layer: Z = IN * W + B
-        float *A;   // Activation: A = ReLU(Z)
-        float *dZ;  // backward propogation gradient
-    };
     LayerDataType LayerData_[LAYER_NUM];
     LayerDataType OutputData_;
 
-    float learning_rate = 0.05f;
-
+    int batchCnt_;
 };

@@ -15,9 +15,15 @@
  */
 
 #pragma once
+
+#include <cmath>
+
 // Input parameters:
+const int DATA_SET_SIZE = 1024;
+const int MINI_BATCH_SIZE = 32;
 const int TRAIN_EPOCH_TOTAL = 20;
 const float IN_DATA_DISTRIBUTION = 0.2f;
+const float LEARNING_RATE = 0.05f * std::sqrtf(MINI_BATCH_SIZE);
 
 #define FIXED_SEED 0x11223344
 //#define SIGMOID_ENA
@@ -25,11 +31,24 @@ const float IN_DATA_DISTRIBUTION = 0.2f;
 // Architecture Parameters
 const int INPUT_DIM = 2;   // (x, y) coordinates
 const int OUTPUT_DIM = 2;  // 2 classes: Red (0) or Blue (1)
-const int LAYER_DIM[] = {4, 4};
+const int LAYER_DIM[] = {24, 14};
 const int LAYER_NUM = sizeof(LAYER_DIM)/sizeof(int);    // hidden layers count (min = 1)
 
 struct DataPoint {
     float x;
     float y;
     int label; // INPUT_DIM: 0 for Red, 1 for Blue
+};
+
+// Model Parameters (Weights and Biases flattened into 1D memory)
+struct LayerDataType {
+    int prevdim;    // Previous layer dimension
+    int dim;        // Current layer dimension
+    float *W;       // Weight
+    float *batchW;  // Delta Weight per batch
+    float *B;       // Bias
+    float *batchB;  // Delta B per batch
+    float *Z;       // Hidden Layer: Z = IN * W + B
+    float *A;       // Activation: A = ReLU(Z)
+    float *dZ;      // backward propogation gradient
 };
