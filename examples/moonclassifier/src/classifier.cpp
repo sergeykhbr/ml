@@ -26,22 +26,30 @@ MoonClassifier::MoonClassifier(std::mt19937 &gen) {
         LayerData_[i].prevdim = InDim;
         LayerData_[i].dim = LAYER_DIM[i];
         LayerData_[i].W = new float [InDim * LAYER_DIM[i]];
-        LayerData_[i].batchW = new float [InDim * LAYER_DIM[i]];
         LayerData_[i].B = new float [LAYER_DIM[i]];
-        LayerData_[i].batchB = new float [LAYER_DIM[i]];
         LayerData_[i].Z = new float [LAYER_DIM[i]];
         LayerData_[i].A = new float [LAYER_DIM[i]];
         LayerData_[i].dZ = new float [LAYER_DIM[i]];
+        LayerData_[i].batchW = new float [InDim * LAYER_DIM[i]];
+        LayerData_[i].adamW_M = new float [InDim * LAYER_DIM[i]];
+        LayerData_[i].adamW_V = new float [InDim * LAYER_DIM[i]];
+        LayerData_[i].batchB = new float [LAYER_DIM[i]];
+        LayerData_[i].adamB_M = new float [LAYER_DIM[i]];
+        LayerData_[i].adamB_V = new float [LAYER_DIM[i]];
 
         float scale = std::sqrt(2.0f / InDim);
         std::normal_distribution<float> dist(0.0f, scale);
         for (int ii = 0; ii < InDim * LAYER_DIM[i]; ++ii) {
             LayerData_[i].W[ii] = dist(gen);
             LayerData_[i].batchW[ii] = 0.0f;
+            LayerData_[i].adamW_M[ii] = 0.0f;
+            LayerData_[i].adamW_V[ii] = 0.0f;
         }
         for (int ii = 0; ii < LAYER_DIM[i]; ++ii) {
             LayerData_[i].B[ii] = 0.0f;
             LayerData_[i].batchB[ii] = 0.0f;
+            LayerData_[i].adamB_M[ii] = 0.0f;
+            LayerData_[i].adamB_V[ii] = 0.0f;
         }
 
         InDim = LAYER_DIM[i];
@@ -49,24 +57,33 @@ MoonClassifier::MoonClassifier(std::mt19937 &gen) {
     OutputData_.prevdim = InDim;
     OutputData_.dim = OUTPUT_DIM;
     OutputData_.W = new float [InDim * OUTPUT_DIM];
-    OutputData_.batchW = new float [InDim * OUTPUT_DIM];
     OutputData_.B = new float [OUTPUT_DIM];
-    OutputData_.batchB = new float [OUTPUT_DIM];
     OutputData_.Z = new float [OUTPUT_DIM];
     OutputData_.A = new float [OUTPUT_DIM];
     OutputData_.dZ = new float [OUTPUT_DIM];
+    OutputData_.batchW = new float [InDim * OUTPUT_DIM];
+    OutputData_.adamW_M = new float [InDim * OUTPUT_DIM];
+    OutputData_.adamW_V = new float [InDim * OUTPUT_DIM];
+    OutputData_.batchB = new float [OUTPUT_DIM];
+    OutputData_.adamB_M = new float [OUTPUT_DIM];
+    OutputData_.adamB_V = new float [OUTPUT_DIM];
 
     float scale = std::sqrt(2.0f / InDim);
     std::normal_distribution<float> dist(0.0f, scale);
     for (int ii = 0; ii < InDim * OUTPUT_DIM; ++ii) {
         OutputData_.W[ii] = dist(gen);
         OutputData_.batchW[ii] = 0.0f;
+        OutputData_.adamW_M[ii] = 0.0f;
+        OutputData_.adamW_V[ii] = 0.0f;
     }
     for (int ii = 0; ii < OUTPUT_DIM; ++ii) {
         OutputData_.B[ii] = 0.0f;
         OutputData_.batchB[ii] = 0.0f;
+        OutputData_.adamB_M[ii] = 0.0f;
+        OutputData_.adamB_V[ii] = 0.0f;
     }
-    batchCnt_ = 0;
+    batchSize_ = 0;
+    batchNum_ = 0;
 }
 
 MoonClassifier::~MoonClassifier() {
@@ -76,12 +93,24 @@ MoonClassifier::~MoonClassifier() {
         delete [] LayerData_[i].Z;
         delete [] LayerData_[i].A;
         delete [] LayerData_[i].dZ;
+        delete [] LayerData_[i].batchW;
+        delete [] LayerData_[i].adamW_M;
+        delete [] LayerData_[i].adamW_V;
+        delete [] LayerData_[i].batchB;
+        delete [] LayerData_[i].adamB_M;
+        delete [] LayerData_[i].adamB_V;
     }
     delete [] OutputData_.W;
     delete [] OutputData_.B;
     delete [] OutputData_.Z;
     delete [] OutputData_.A;
     delete [] OutputData_.dZ;
+    delete [] OutputData_.batchW;
+    delete [] OutputData_.adamW_M;
+    delete [] OutputData_.adamW_V;
+    delete [] OutputData_.batchB;
+    delete [] OutputData_.adamB_M;
+    delete [] OutputData_.adamB_V;
 }
 
 // OUT = IN * W1 + B1
@@ -186,26 +215,58 @@ void MoonClassifier::gradientDescent(float *dZ, int sz,   // Layer[n]
                                      float *B) {            // Layer[n]
     for (int i = 0; i < prvsz; ++i) {
         for (int j = 0; j < sz; ++j) {
-            W[i * sz + j] -= (Aprv[i] * dZ[j]);
+            W[i * sz + j] += (Aprv[i] * dZ[j]);
         }
     }
     for (int i = 0; i < sz; i++) {
-        B[i] -= dZ[i];
+        B[i] += dZ[i];
     }
 }
 
-void MoonClassifier::batchIncrement(int batchSize,
+void MoonClassifier::batchIncrement(int batchNum,
+                                    int batchSize,
                                     float learning_rate,
                                     LayerDataType *layer) {
-    //float w1 = 0;
+    float grad;
+#ifdef ADAM_ENA
+    float beta1_correction = 1.0f - std::pow(ADAM_BETA1, batchNum);
+    float beta2_correction = 1.0f - std::pow(ADAM_BETA2, batchNum);
+#endif
     for (int i = 0; i < layer->prevdim * layer->dim; i++) {
-        layer->W[i] += learning_rate * (layer->batchW[i] / batchSize);
-        //w1 += learning_rate * (layer->batchW[i] / batchSize);
+        grad = layer->batchW[i] / batchSize;
+#ifdef ADAM_ENA
+        // Update first moment (direct LP filter)
+        layer->adamW_M[i] = ADAM_BETA1 * layer->adamW_M[i]
+                        + (1.0f - ADAM_BETA1) * grad;
+        // Update second moment (Noise power LP filter)
+        layer->adamW_V[i] = ADAM_BETA2 * layer->adamW_V[i]
+                        + (1.0f - ADAM_BETA2) * grad * grad;
+        // Bias correction
+        float m_hat = layer->adamW_M[i] / beta1_correction;
+        float v_hat = layer->adamW_V[i] / beta2_correction;
+
+        layer->W[i] -= (ADAM_ALPHA / (std::sqrtf(v_hat) + ADAM_EPSILON)) * m_hat;
+#else
+        layer->W[i] -= learning_rate * grad;
+#endif
     }
-    //float b1 = 0;
     for (int i = 0; i < layer->dim; i++) {
-        layer->B[i] += learning_rate * (layer->batchB[i] / batchSize);
-        //b1 += learning_rate * (layer->batchB[i] / batchSize);
+        grad = layer->batchB[i] / batchSize;
+#ifdef ADAM_ENA
+        // Update first moment (direct LP filter)
+        layer->adamB_M[i] = ADAM_BETA1 * layer->adamB_M[i]
+                        + (1.0f - ADAM_BETA1) * grad;
+        // Update second moment (Noise power LP filter)
+        layer->adamB_V[i] = ADAM_BETA2 * layer->adamB_V[i]
+                        + (1.0f - ADAM_BETA2) * grad * grad;
+        // Bias correction
+        float m_hat = layer->adamB_M[i] / beta1_correction;
+        float v_hat = layer->adamB_V[i] / beta2_correction;
+
+        layer->B[i] -= (ADAM_ALPHA / (std::sqrtf(v_hat) + ADAM_EPSILON)) * m_hat;
+#else
+        layer->B[i] -= learning_rate * grad;
+#endif
     }
     memset(layer->batchW, 0, layer->prevdim * layer->dim * sizeof(float));
     memset(layer->batchB, 0, layer->dim * sizeof(float));
@@ -248,12 +309,19 @@ void MoonClassifier::trainStep(DataPoint *datapoint) {
                     layer->batchB);
 
 
-    if (++batchCnt_ >= MINI_BATCH_SIZE) {
-        batchIncrement(batchCnt_, LEARNING_RATE, &OutputData_);
+    if (++batchSize_ >= MINI_BATCH_SIZE) {
+        batchNum_++;
+        batchIncrement(batchNum_,
+                       batchSize_,
+                       LEARNING_RATE,
+                       &OutputData_);
         for (int i = LAYER_NUM - 1; i >= 0; i--) {
-            batchIncrement(batchCnt_, LEARNING_RATE, &LayerData_[i]);
+            batchIncrement(batchNum_,
+                           batchSize_,
+                           LEARNING_RATE,
+                           &LayerData_[i]);
         }
-        batchCnt_ = 0;
+        batchSize_ = 0;
     }
 }
 

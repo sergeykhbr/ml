@@ -38,11 +38,15 @@ class MoonClassifier {
                          float *A, int Asz,
                          float *W,
                          float *B);
-    void batchIncrement(int batchSize, float learning_rate, LayerDataType *layer);
+    void batchIncrement(int batchNum,
+                        int batchSize,
+                        float learning_rate,
+                        LayerDataType *layer);
 
  private:
     LayerDataType LayerData_[LAYER_NUM];
     LayerDataType OutputData_;
 
-    int batchCnt_;
+    int batchSize_;   // counter from 0 to Batches Total - 1
+    int batchNum_;  // number of batches per whole training
 };
