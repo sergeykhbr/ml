@@ -51,7 +51,8 @@ class PlotWidget : public QWidget {
  private:
     void point2xy(QPoint &p, float *xy);
     QPoint xy2point(float x, float y);
-    void drawImage(QImage &img, int epoch, float *frame);
+    QColor probability2color(float *vec);
+    void drawImage(QImage &img, int epoch, QColor *frame);
 
  private:
     uint32_t seed_;

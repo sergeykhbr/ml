@@ -21,14 +21,19 @@
 #define FIXED_SEED 0x11223344
 //#define SIGMOID_ENA
 #define ADAM_ENA        // if disable Mini Batch used (simple average)
+#define SPIRAL_ENA
+#define MINI_BATCH_SIZE 32
 
-const int TRAIN_EPOCH_TOTAL = 100;
+const int TRAIN_EPOCH_TOTAL = 50;
 
 // Input parameters:
 const int DATA_SET_SIZE = 1024;
-const int MINI_BATCH_SIZE = 32;
 const float IN_DATA_DISTRIBUTION = 0.2f;
-const float LEARNING_RATE = 0.05f;// * std::sqrtf(MINI_BATCH_SIZE);
+#if !defined(ADAM_ENA) && (MINI_BATCH_SIZE > 1)
+    const float LEARNING_RATE = 0.05f * std::sqrtf(MINI_BATCH_SIZE);
+#else
+    const float LEARNING_RATE = 0.05f;
+#endif
 // ADAM method
 const float ADAM_ALPHA = LEARNING_RATE;
 const float ADAM_BETA1 = 0.9f;
@@ -36,9 +41,15 @@ const float ADAM_BETA2 = 0.999f;
 const float ADAM_EPSILON = 1e-8f;
 
 // Architecture Parameters
+#ifdef SPIRAL_ENA
+const int INPUT_DIM = 2;   // (x, y) coordinates
+const int OUTPUT_DIM = 3;  // 3 classes: Red (0) or Blue (1) Green (2)
+const int LAYER_DIM[] = {24, 12};
+#else
 const int INPUT_DIM = 2;   // (x, y) coordinates
 const int OUTPUT_DIM = 2;  // 2 classes: Red (0) or Blue (1)
 const int LAYER_DIM[] = {4, 4};
+#endif
 const int LAYER_NUM = sizeof(LAYER_DIM)/sizeof(int);    // hidden layers count (min = 1)
 
 struct DataPoint {

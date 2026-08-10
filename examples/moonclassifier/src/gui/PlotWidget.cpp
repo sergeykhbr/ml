@@ -42,13 +42,14 @@ void PlotWidget::saveEpoch(int epoch) {
     float IN[INPUT_DIM];
     float OUT[OUTPUT_DIM];
     QPoint p;
-    float *frame = new float [width * height];
-    float *probability = frame;
+    QColor *frame = new QColor [width * height];
+    QColor *probability = frame;
     for (int w = 0; w < width; w++) {
         for (int h = 0; h < height; h++) {
             p = QPoint(w, h);
             point2xy(p, IN);
-            *probability = classifier_->forwardPass(IN, OUT);
+            classifier_->forwardPass(IN, OUT);
+            *probability = probability2color(OUT);
             probability++;
         }
     }
@@ -86,15 +87,23 @@ void PlotWidget::showEvent(QShowEvent *event) {
     tmr_->start(200);    // ms
 }
 
-QColor probability2color(float p) {
-    p = std::max(0.0f, std::min(1.0f, p));
+QColor PlotWidget::probability2color(float *vec) {
+    int rgb[3] = {0};
+    float p;
+    for (int i = 0; i < OUTPUT_DIM; i++) {
+        p = vec[i];
+        p = std::max(0.0f, std::min(1.0f, p));
+        rgb[i] = static_cast<int>(139.0f * p);
+    }
+    /*p = std::max(0.0f, std::min(1.0f, p));
     int g = 0;
     int r = static_cast<int>(139.0f * p);
     int b = static_cast<int>(139.0f * (1.0f -  p));
-    return QColor(qRgb(r, g, b));
+    return QColor(qRgb(r, g, b));*/
+    return QColor(qRgb(rgb[0], rgb[1], rgb[2]));
 }
 
-void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
+void PlotWidget::drawImage(QImage &img, int epoch, QColor *frame) {
     img.fill(Qt::white);
     QPainter painter(&img);
 
@@ -103,14 +112,26 @@ void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
     // go through all pixels to find border:
     painter.setBrush(Qt::black);
     QPoint p;
-    float probability;
     for (int w = 0; w < img.width(); w++) {
         for (int h = 0; h < img.height(); h++) {
             p = QPoint(w, h);
-            probability = *frame++;
-            painter.setPen(probability2color(probability));
+            painter.setPen(*frame);
             painter.drawPoint(p);
+            frame++;
         }
+    }
+
+    // Draw generated dataset:
+    painter.setPen(Qt::NoPen);           // No outline
+    for (const auto& dot : dots_) {
+        if (dot.label == 0) {
+            painter.setBrush(Qt::red);
+        } else if (dot.label == 1) {
+            painter.setBrush(Qt::green);
+        } else if (dot.label == 2) {
+            painter.setBrush(Qt::blue);
+        }
+        painter.drawEllipse(xy2point(dot.x, dot.y), 2, 2);
     }
 
     painter.setPen(Qt::darkGray);
@@ -118,20 +139,10 @@ void PlotWidget::drawImage(QImage &img, int epoch, float *frame) {
     for (int i = 1; i < LAYER_NUM; i++) {
         neurons += QString(":%1").arg(LAYER_DIM[i]);
     }
-    painter.drawText(80, 12, neurons);
-    painter.drawText(80, 24, QString("Epoch: %1").arg(epoch));
-    painter.drawText(80, 36, QString("Seed: %1").arg(seed_, 8, 16));
-
-    // Draw generated dataset:
-    painter.setPen(Qt::NoPen);           // No outline
-    for (const auto& dot : dots_) {
-        if (dot.label) {
-            painter.setBrush(Qt::red);
-        } else {
-            painter.setBrush(Qt::blue);
-        }
-        painter.drawEllipse(xy2point(dot.x, dot.y), 2, 2);
-    }
+    painter.drawText(80, 12*1, neurons);
+    painter.drawText(80, 12*2, QString("Epoch: %1").arg(epoch));
+    painter.drawText(80, 12*3, QString("Seed: %1").arg(seed_, 8, 16));
+    painter.drawText(80, 12*4, QString("LearnRate: %1").arg(LEARNING_RATE, 0, 'f', 2));
 }
 
 void PlotWidget::paintEvent(QPaintEvent* event) {
