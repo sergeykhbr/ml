@@ -20,7 +20,7 @@
 #include <algorithm>
 #include "classifier.h"
 
-MoonClassifier::MoonClassifier(std::mt19937 &gen) {
+CNNClassifier::CNNClassifier(std::mt19937 &gen) {
     int InDim = INPUT_DIM;
     for (int i = 0; i < LAYER_NUM; i++) {
         LayerData_[i].prevdim = InDim;
@@ -86,7 +86,7 @@ MoonClassifier::MoonClassifier(std::mt19937 &gen) {
     batchNum_ = 0;
 }
 
-MoonClassifier::~MoonClassifier() {
+CNNClassifier::~CNNClassifier() {
     for (int i = 0; i < LAYER_NUM; i++) {
         delete [] LayerData_[i].W;
         delete [] LayerData_[i].B;
@@ -114,7 +114,7 @@ MoonClassifier::~MoonClassifier() {
 }
 
 // OUT = IN * W1 + B1
-void MoonClassifier::forwardLayer(float *IN, int isz,
+void CNNClassifier::forwardLayer(float *IN, int isz,
                                   float *OUT, int osz,
                                   float *W,
                                   float *B) {
@@ -127,7 +127,7 @@ void MoonClassifier::forwardLayer(float *IN, int isz,
     }
 }
 
-void MoonClassifier::backwardLayer(float *dZ, int sz,                   // Layer[n]
+void CNNClassifier::backwardLayer(float *dZ, int sz,                   // Layer[n]
                                    float *Zprv, float *dZprv, int prvsz,// Layer[n-1]
                                    float *W) {                          // Layer[n]
     // Error at hidden layer: dOUT = (dIN * W^T) * ReLU_derivative(OUT)
@@ -144,25 +144,25 @@ void MoonClassifier::backwardLayer(float *dZ, int sz,                   // Layer
     }
 }
 
-float MoonClassifier::ReLU(float IN) {
+float CNNClassifier::ReLU(float IN) {
     return std::max(0.0f, IN);
 }
 
-float MoonClassifier::derivativeReLU(float IN) {
+float CNNClassifier::derivativeReLU(float IN) {
     return IN > 0.0f ? 1.0f : 0.0f;
 }
 
-float MoonClassifier::Sigmoid(float IN) {
+float CNNClassifier::Sigmoid(float IN) {
     return 1.0f / (1.0f + std::exp(-IN));
 }
 
-float MoonClassifier::derivativeSigmoid(float IN) {
+float CNNClassifier::derivativeSigmoid(float IN) {
     float act = Sigmoid(IN);
     return act * (1.0f - act);
 }
 
 
-void MoonClassifier::activation(float *IN, float *OUT, int sz) {
+void CNNClassifier::activation(float *IN, float *OUT, int sz) {
     for (int i = 0; i < sz; ++i) {
 #ifdef SIGMOID_ENA
         OUT[i] = Sigmoid(IN[i]);
@@ -172,7 +172,7 @@ void MoonClassifier::activation(float *IN, float *OUT, int sz) {
     }
 }
 
-void MoonClassifier::activationSoftmax(float *IN, float *OUT, int sz) {
+void CNNClassifier::activationSoftmax(float *IN, float *OUT, int sz) {
     float m = IN[0];
     float sum_exp = 0.0f;
     for (int i = 1; i < sz; i++) {
@@ -186,7 +186,7 @@ void MoonClassifier::activationSoftmax(float *IN, float *OUT, int sz) {
     }
 }
 
-float MoonClassifier::forwardPass(float *IN, float *OUT) {
+float CNNClassifier::forwardPass(float *IN, float *OUT) {
     LayerDataType *layer;
     int InDim = INPUT_DIM;
     for (int i = 0; i < LAYER_NUM; i++) {
@@ -209,7 +209,7 @@ float MoonClassifier::forwardPass(float *IN, float *OUT) {
     return OUT[1];
 }
 
-void MoonClassifier::gradientDescent(float *dZ, int sz,   // Layer[n]
+void CNNClassifier::gradientDescent(float *dZ, int sz,   // Layer[n]
                                      float *Aprv, int prvsz,     // Layer[n-1]
                                      float *W,              // Layer[n]
                                      float *B) {            // Layer[n]
@@ -223,18 +223,15 @@ void MoonClassifier::gradientDescent(float *dZ, int sz,   // Layer[n]
     }
 }
 
-void MoonClassifier::batchIncrement(int batchNum,
+void CNNClassifier::batchIncrement(int batchNum,
                                     int batchSize,
                                     float learning_rate,
                                     LayerDataType *layer) {
     float grad;
-#ifdef ADAM_ENA
     float beta1_correction = 1.0f - std::pow(ADAM_BETA1, batchNum);
     float beta2_correction = 1.0f - std::pow(ADAM_BETA2, batchNum);
-#endif
     for (int i = 0; i < layer->prevdim * layer->dim; i++) {
         grad = layer->batchW[i] / batchSize;
-#ifdef ADAM_ENA
         // Update first moment (direct LP filter)
         layer->adamW_M[i] = ADAM_BETA1 * layer->adamW_M[i]
                         + (1.0f - ADAM_BETA1) * grad;
@@ -246,13 +243,9 @@ void MoonClassifier::batchIncrement(int batchNum,
         float v_hat = layer->adamW_V[i] / beta2_correction;
 
         layer->W[i] -= (ADAM_ALPHA / (std::sqrtf(v_hat) + ADAM_EPSILON)) * m_hat;
-#else
-        layer->W[i] -= learning_rate * grad;
-#endif
     }
     for (int i = 0; i < layer->dim; i++) {
         grad = layer->batchB[i] / batchSize;
-#ifdef ADAM_ENA
         // Update first moment (direct LP filter)
         layer->adamB_M[i] = ADAM_BETA1 * layer->adamB_M[i]
                         + (1.0f - ADAM_BETA1) * grad;
@@ -264,17 +257,48 @@ void MoonClassifier::batchIncrement(int batchNum,
         float v_hat = layer->adamB_V[i] / beta2_correction;
 
         layer->B[i] -= (ADAM_ALPHA / (std::sqrtf(v_hat) + ADAM_EPSILON)) * m_hat;
-#else
-        layer->B[i] -= learning_rate * grad;
-#endif
     }
     memset(layer->batchW, 0, layer->prevdim * layer->dim * sizeof(float));
     memset(layer->batchB, 0, layer->dim * sizeof(float));
 }
 
-void MoonClassifier::trainStep(DataPoint *datapoint) {
-    // --- 1. FORWARD PASS ---
-    float X[INPUT_DIM] = {datapoint->x, datapoint->y};
+float CNNClassifier::correlateImage(float *img, int x, int y, float *filt) {
+    float sum = 0.0f;
+    // Slide the 3x3 patch window
+    for (int ky = 0; ky = KERNEL_SIZE; ky++) {
+        for (int kx = 0; kx = KERNEL_SIZE; kx++) {
+            int img_x = x + kx;
+            int img_y = y + ky;
+            float pixel = img[img_y * IMG_W + img_x];
+            float weight = filt[ky * KERNEL_SIZE + kx];
+            sum += pixel * weight;
+        }
+    }
+    return sum;
+}
+
+void CNNClassifier::trainStep(DataPoint *datapoint) {
+    float *X = datapoint->pixels;   // input layer
+
+    //  Array allocation for intermediate tracking
+    float conv_out[NUM_FILTERS * OUT_W * OUT_H] = {0.0f};
+    float conv_act[FLATTEN_DIM] = {0.0f}; // This acts as A1 for the dense layer
+
+    for (int f = 0; f < NUM_FILTERS; ++f) {
+        int filter_offset = f * KERNEL_SIZE * KERNEL_SIZE;
+        int feature_map_offset = f * OUT_W * OUT_H;
+
+        for (int out_y = 0; out_y < OUT_H; out_y++) {
+            for (int out_x = 0; out_x < OUT_W; out_x++) {
+                float sum =
+                    correlateImage(X, out_y, out_x, &K[filter_offset]);
+                int out_idx = feature_map_offset + out_y * OUT_W + out_x;
+                conv_out[out_idx] = sum + conv_bias[f];
+                conv_act[out_idx] = std::max(0.0f, conv_out[out_idx]);  // ReLU activation
+            }
+        }
+    }
+
 
     forwardPass(X, OutputData_.A);
     // Calculate loss for tracking: Cross-Entropy = -sum(Y * log(A3))

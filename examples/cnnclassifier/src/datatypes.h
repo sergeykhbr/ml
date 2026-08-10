@@ -20,18 +20,13 @@
 
 #define FIXED_SEED 0x11223344
 //#define SIGMOID_ENA
-#define ADAM_ENA        // if disable Mini Batch used (simple average)
 #define MINI_BATCH_SIZE 32
 
 const int TRAIN_EPOCH_TOTAL = 50;
 
 // Input parameters:
 const int DATA_SET_SIZE = 1024;
-#if !defined(ADAM_ENA) && (MINI_BATCH_SIZE > 1)
-    const float LEARNING_RATE = 0.05f * std::sqrtf(MINI_BATCH_SIZE);
-#else
-    const float LEARNING_RATE = 0.05f;
-#endif
+const float LEARNING_RATE = 0.05f;
 // ADAM method
 const float ADAM_ALPHA = LEARNING_RATE;
 const float ADAM_BETA1 = 0.9f;
@@ -40,19 +35,24 @@ const float ADAM_EPSILON = 1e-8f;
 
 
 // Architecture Parameters
-const int IMG_DIM = 14;
-const int INPUT_PIXELS = IMG_DIM * IMG_DIM;
+const int IMG_W = 14;
+const int IMG_H = 14;
+const int KERNEL_SIZE = 3; // 3x3 pixel filter to detect edges
+const int NUM_FILTERS = 3;
 
-const int KERNEL_DIM = 3; // 3x3 pixel filter to detect edges
+const int INPUT_PIXELS = IMG_W * IMG_H;
+const int OUT_W = IMG_W - KERNEL_SIZE + 1;
+const int OUT_H = IMG_H - KERNEL_SIZE + 1;
+const int FLATTEN_DIM = NUM_FILTERS * OUT_W * OUT_H;
 
-const int INPUT_DIM = IMG_DIM * IMG_DIM;
-const int OUTPUT_DIM = 3;  // 3 classes: 0=Circle, 1=Square; 2=Triangle
-const int LAYER_DIM[] = {144};  //(IMG_DIM - KERNEL_DIM + 1) * (IMG_DIM - KERNEL_DIM + 1);
+const int INPUT_DIM = IMG_W * IMG_H;    // 14*14 = 196 neurons
+const int LAYER_DIM[] = {FLATTEN_DIM};  // 3*12*12 = 432 neurons
 const int LAYER_NUM = sizeof(LAYER_DIM)/sizeof(int);    // hidden layers count (min = 1)
+const int OUTPUT_DIM = 3;  // 3 classes: 0=Circle, 1=Square; 2=Triangle
 
 struct DataPoint {
     float pixels[INPUT_PIXELS];
-    int label; // INPUT_DIM: 0=Circle, 1=Square; 2=Triangle
+    int label; // 0=Circle, 1=Square; 2=Triangle
 };
 
 // Model Parameters (Weights and Biases flattened into 1D memory)
