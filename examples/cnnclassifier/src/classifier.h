@@ -33,12 +33,15 @@ class CNNClassifier {
     float derivativeSigmoid(float IN);
     void activation(float *IN, float *OUT, int sz);
     void activationSoftmax(float *IN, float *OUT, int sz);
-    float forwardPass(float *IN, float *OUT);
+    void forwardPass(float *IN, float *OUT);
     void backwardLayer(float *dIN, int isz, float *OUT, float *dOUT, int osz, float *W);
+    void backwardLayer(LayerDataType *IN, ConvLayerType *OUT);
     void gradientDescent(float *dZ, int dZsz,
                          float *A, int Asz,
                          float *W,
                          float *B);
+    void gradientDescent(LayerDataType *TOP, float *IN);
+    void gradientDescent(ConvLayerType *TOP, float *IN);
     void batchIncrement(int batchNum,
                         int batchSize,
                         float learning_rate,
@@ -46,8 +49,10 @@ class CNNClassifier {
 
  private:
     // Conv Layer: 3 filters of size 3x3
-    float K[NUM_FILTERS * KERNEL_SIZE * KERNEL_SIZE];
-    float conv_bias[NUM_FILTERS];
+    //float K[NUM_FILTERS * KERNEL_SIZE * KERNEL_SIZE];
+    //float conv_bias[NUM_FILTERS];
+
+    ConvLayerType LayerConv_;
 
     LayerDataType LayerData_[LAYER_NUM];
     LayerDataType OutputData_;

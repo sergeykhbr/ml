@@ -20,7 +20,7 @@
 
 #define FIXED_SEED 0x11223344
 //#define SIGMOID_ENA
-#define MINI_BATCH_SIZE 32
+#define MINI_BATCH_SIZE 1
 
 const int TRAIN_EPOCH_TOTAL = 50;
 
@@ -38,14 +38,15 @@ const float ADAM_EPSILON = 1e-8f;
 const int IMG_W = 14;
 const int IMG_H = 14;
 const int KERNEL_SIZE = 3; // 3x3 pixel filter to detect edges
+const int KERNEL_DIM = KERNEL_SIZE * KERNEL_SIZE;
 const int NUM_FILTERS = 3;
 
 const int INPUT_PIXELS = IMG_W * IMG_H;
 const int OUT_W = IMG_W - KERNEL_SIZE + 1;
 const int OUT_H = IMG_H - KERNEL_SIZE + 1;
-const int FLATTEN_DIM = NUM_FILTERS * OUT_W * OUT_H;
 
 const int INPUT_DIM = IMG_W * IMG_H;    // 14*14 = 196 neurons
+const int FLATTEN_DIM = NUM_FILTERS * OUT_W * OUT_H;
 const int LAYER_DIM[] = {FLATTEN_DIM};  // 3*12*12 = 432 neurons
 const int LAYER_NUM = sizeof(LAYER_DIM)/sizeof(int);    // hidden layers count (min = 1)
 const int OUTPUT_DIM = 3;  // 3 classes: 0=Circle, 1=Square; 2=Triangle
@@ -71,4 +72,16 @@ struct LayerDataType {
     float *batchB;  // Delta B per batch
     float *adamB_M; // First moment (Direct LP filter)
     float *adamB_V; // Second moment (Noise power LP filter)
+};
+
+struct ConvLayerType {
+    int prevdim;    // Previous layer dimension
+    int dim;        // Current layer dimension
+    float K[NUM_FILTERS * KERNEL_DIM];
+    float batchK[NUM_FILTERS * KERNEL_DIM];
+    float B[NUM_FILTERS];
+    float batchB[NUM_FILTERS];
+    float Z[FLATTEN_DIM];       // 
+    float A[FLATTEN_DIM];       // Activation: A = ReLU(Z)
+    float dZ[FLATTEN_DIM];      // backward propogation gradient
 };

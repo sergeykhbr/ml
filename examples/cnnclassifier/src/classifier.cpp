@@ -21,8 +21,25 @@
 #include "classifier.h"
 
 CNNClassifier::CNNClassifier(std::mt19937 &gen) {
+    float scale = std::sqrt(2.0f / KERNEL_DIM);
+    std::normal_distribution<float> dist(0.0f, scale);
+    LayerConv_.dim = FLATTEN_DIM;
+    LayerConv_.prevdim = IMG_H * IMG_W;
+    for (int i = 0; i < NUM_FILTERS * KERNEL_DIM; i++) {
+        LayerConv_.K[i] = dist(gen);
+        LayerConv_.batchK[i] = 0.0f;
+    }
+    for (int i = 0; i < FLATTEN_DIM; i++) {
+        LayerConv_.Z[i] = 0.0f;
+        LayerConv_.A[i] = 0.0f;
+    }
+    for (int i = 0; i < NUM_FILTERS; i++) {
+        LayerConv_.B[i] = 0;
+        LayerConv_.batchB[i] = 0;
+    }
+
     int InDim = INPUT_DIM;
-    for (int i = 0; i < LAYER_NUM; i++) {
+    /*for (int i = 0; i < LAYER_NUM; i++) {
         LayerData_[i].prevdim = InDim;
         LayerData_[i].dim = LAYER_DIM[i];
         LayerData_[i].W = new float [InDim * LAYER_DIM[i]];
@@ -53,7 +70,9 @@ CNNClassifier::CNNClassifier(std::mt19937 &gen) {
         }
 
         InDim = LAYER_DIM[i];
-    }
+    }*/
+    InDim = FLATTEN_DIM;
+
     OutputData_.prevdim = InDim;
     OutputData_.dim = OUTPUT_DIM;
     OutputData_.W = new float [InDim * OUTPUT_DIM];
@@ -87,7 +106,7 @@ CNNClassifier::CNNClassifier(std::mt19937 &gen) {
 }
 
 CNNClassifier::~CNNClassifier() {
-    for (int i = 0; i < LAYER_NUM; i++) {
+    /*for (int i = 0; i < LAYER_NUM; i++) {
         delete [] LayerData_[i].W;
         delete [] LayerData_[i].B;
         delete [] LayerData_[i].Z;
@@ -99,7 +118,7 @@ CNNClassifier::~CNNClassifier() {
         delete [] LayerData_[i].batchB;
         delete [] LayerData_[i].adamB_M;
         delete [] LayerData_[i].adamB_V;
-    }
+    }*/
     delete [] OutputData_.W;
     delete [] OutputData_.B;
     delete [] OutputData_.Z;
@@ -124,23 +143,6 @@ void CNNClassifier::forwardLayer(float *IN, int isz,
             OUT[j] += IN[i] * W[i * osz + j];
         }
         OUT[j] += B[j];
-    }
-}
-
-void CNNClassifier::backwardLayer(float *dZ, int sz,                   // Layer[n]
-                                   float *Zprv, float *dZprv, int prvsz,// Layer[n-1]
-                                   float *W) {                          // Layer[n]
-    // Error at hidden layer: dOUT = (dIN * W^T) * ReLU_derivative(OUT)
-    for (int i = 0; i < prvsz; ++i) {
-        float error = 0.0f;
-        for (int j = 0; j < sz; ++j) {
-            error += dZ[j] * W[i * sz + j]; 
-        }
-#ifdef SIGMOID_ENA
-        dZprv[i] = error * derivativeSigmoid(Zprv[i]);
-#else
-        dZprv[i] = error * derivativeReLU(Zprv[i]);
-#endif
     }
 }
 
@@ -186,10 +188,32 @@ void CNNClassifier::activationSoftmax(float *IN, float *OUT, int sz) {
     }
 }
 
-float CNNClassifier::forwardPass(float *IN, float *OUT) {
+void CNNClassifier::forwardPass(float *IN, float *OUT) {
     LayerDataType *layer;
     int InDim = INPUT_DIM;
-    for (int i = 0; i < LAYER_NUM; i++) {
+
+    for (int f = 0; f < NUM_FILTERS; ++f) {
+        int feature_map_offset = f * OUT_W * OUT_H;
+
+        for (int out_y = 0; out_y < OUT_H; out_y++) {
+            for (int out_x = 0; out_x < OUT_W; out_x++) {
+                float sum = correlateImage(IN, out_x, out_y, &LayerConv_.K[f * KERNEL_DIM]);
+                int out_idx = feature_map_offset + out_y * OUT_W + out_x;
+                LayerConv_.Z[out_idx] = sum + LayerConv_.B[f];
+                LayerConv_.A[out_idx] = ReLU(LayerConv_.Z[out_idx]);
+            }
+        }
+    }
+
+    IN = LayerConv_.A;
+    InDim = FLATTEN_DIM;
+    forwardLayer(IN, InDim,
+                OutputData_.Z, OUTPUT_DIM,
+                OutputData_.W,
+                OutputData_.B);
+    activationSoftmax(OutputData_.Z, OutputData_.A, OUTPUT_DIM);
+
+    /*for (int i = 0; i < LAYER_NUM; i++) {
         layer = &LayerData_[i];
         forwardLayer(IN, InDim,
                      layer->Z, LAYER_DIM[i],
@@ -205,8 +229,38 @@ float CNNClassifier::forwardPass(float *IN, float *OUT) {
                 OutputData_.W,
                 OutputData_.B);
     activationSoftmax(OutputData_.Z, OUT, OUTPUT_DIM);
+    */
+}
 
-    return OUT[1];
+void CNNClassifier::backwardLayer(float *dZ, int sz,                   // Layer[n]
+                                   float *Zprv, float *dZprv, int prvsz,// Layer[n-1]
+                                   float *W) {                          // Layer[n]
+    // Error at hidden layer: dOUT = (dIN * W^T) * ReLU_derivative(OUT)
+    for (int i = 0; i < prvsz; ++i) {
+        float error = 0.0f;
+        for (int j = 0; j < sz; ++j) {
+            error += dZ[j] * W[i * sz + j]; 
+        }
+#ifdef SIGMOID_ENA
+        dZprv[i] = error * derivativeSigmoid(Zprv[i]);
+#else
+        dZprv[i] = error * derivativeReLU(Zprv[i]);
+#endif
+    }
+}
+
+void CNNClassifier::backwardLayer(LayerDataType *IN, ConvLayerType *OUT) {
+    for (int i = 0; i < OUT->dim; ++i) {
+        float error = 0.0f;
+        for (int j = 0; j < IN->dim; ++j) {
+            error += IN->dZ[j] * IN->W[i * IN->dim + j]; 
+        }
+#ifdef SIGMOID_ENA
+        OUT->dZ[i] = error * derivativeSigmoid(OUT->Z[i]);
+#else
+        OUT->dZ[i] = error * derivativeReLU(OUT->Z[i]);
+#endif
+    }
 }
 
 void CNNClassifier::gradientDescent(float *dZ, int sz,   // Layer[n]
@@ -220,6 +274,43 @@ void CNNClassifier::gradientDescent(float *dZ, int sz,   // Layer[n]
     }
     for (int i = 0; i < sz; i++) {
         B[i] += dZ[i];
+    }
+}
+
+void CNNClassifier::gradientDescent(LayerDataType *UP, float *IN) {
+    for (int i = 0; i < UP->prevdim; ++i) {
+        for (int j = 0; j < UP->dim; ++j) {
+            UP->batchW[i * UP->dim + j] += (IN[i] * UP->dZ[j]);
+        }
+    }
+    for (int i = 0; i < UP->dim; i++) {
+        UP->batchB[i] += UP->dZ[i];
+    }
+}
+
+void CNNClassifier::gradientDescent(ConvLayerType *UP, float *BTM) {
+    for (int f = 0; f < NUM_FILTERS; ++f) {
+        int filter_offset = f * KERNEL_SIZE * KERNEL_SIZE;
+        int feature_map_offset = f * OUT_W * OUT_H;
+
+        for (int out_y = 0; out_y < OUT_H; ++out_y) {
+            for (int out_x = 0; out_x < OUT_W; ++out_x) {
+                int out_idx = feature_map_offset + out_y * OUT_W + out_x;
+                float current_dZ1 = UP->dZ[out_idx];
+                UP->batchB[f] += current_dZ1;
+
+                // Distribute gradient across the 3x3 filter window locations
+                for (int ky = 0; ky < KERNEL_SIZE; ++ky) {
+                    for (int kx = 0; kx < KERNEL_SIZE; ++kx) {
+                        int img_x = out_x + kx;
+                        int img_y = out_y + ky;
+                        float input_pixel = BTM[img_y * IMG_W + img_x];
+
+                        UP->batchK[filter_offset + ky * KERNEL_SIZE + kx] += input_pixel * current_dZ1;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -267,9 +358,7 @@ float CNNClassifier::correlateImage(float *img, int x, int y, float *filt) {
     // Slide the 3x3 patch window
     for (int ky = 0; ky = KERNEL_SIZE; ky++) {
         for (int kx = 0; kx = KERNEL_SIZE; kx++) {
-            int img_x = x + kx;
-            int img_y = y + ky;
-            float pixel = img[img_y * IMG_W + img_x];
+            float pixel = img[(y + ky) * IMG_W + x + kx];
             float weight = filt[ky * KERNEL_SIZE + kx];
             sum += pixel * weight;
         }
@@ -280,27 +369,9 @@ float CNNClassifier::correlateImage(float *img, int x, int y, float *filt) {
 void CNNClassifier::trainStep(DataPoint *datapoint) {
     float *X = datapoint->pixels;   // input layer
 
-    //  Array allocation for intermediate tracking
-    float conv_out[NUM_FILTERS * OUT_W * OUT_H] = {0.0f};
-    float conv_act[FLATTEN_DIM] = {0.0f}; // This acts as A1 for the dense layer
-
-    for (int f = 0; f < NUM_FILTERS; ++f) {
-        int filter_offset = f * KERNEL_SIZE * KERNEL_SIZE;
-        int feature_map_offset = f * OUT_W * OUT_H;
-
-        for (int out_y = 0; out_y < OUT_H; out_y++) {
-            for (int out_x = 0; out_x < OUT_W; out_x++) {
-                float sum =
-                    correlateImage(X, out_y, out_x, &K[filter_offset]);
-                int out_idx = feature_map_offset + out_y * OUT_W + out_x;
-                conv_out[out_idx] = sum + conv_bias[f];
-                conv_act[out_idx] = std::max(0.0f, conv_out[out_idx]);  // ReLU activation
-            }
-        }
-    }
-
-
     forwardPass(X, OutputData_.A);
+
+
     // Calculate loss for tracking: Cross-Entropy = -sum(Y * log(A3))
     float loss = -std::log(std::max(OutputData_.A[datapoint->label], 1e-7f));
 
@@ -314,7 +385,12 @@ void CNNClassifier::trainStep(DataPoint *datapoint) {
         OutputData_.dZ[i] = OutputData_.A[i] - Y[i];
     }
 
-    LayerDataType *layer = &OutputData_;
+    backwardLayer(&OutputData_, &LayerConv_);
+    gradientDescent(&OutputData_, LayerConv_.A);
+
+    gradientDescent(&LayerConv_, X);
+
+    /*LayerDataType *layer = &OutputData_;
     int LayerDim = OUTPUT_DIM;
     for (int i = LAYER_NUM - 1; i >= 0; i--) {
         backwardLayer(layer->dZ, LayerDim,
@@ -332,19 +408,23 @@ void CNNClassifier::trainStep(DataPoint *datapoint) {
                     layer->batchW,
                     layer->batchB);
 
-
+    */
     if (++batchSize_ >= MINI_BATCH_SIZE) {
         batchNum_++;
         batchIncrement(batchNum_,
                        batchSize_,
                        LEARNING_RATE,
                        &OutputData_);
-        for (int i = LAYER_NUM - 1; i >= 0; i--) {
+        /*for (int i = LAYER_NUM - 1; i >= 0; i--) {
             batchIncrement(batchNum_,
                            batchSize_,
                            LEARNING_RATE,
                            &LayerData_[i]);
-        }
+        }*/
+            batchIncrement(batchNum_,
+                           batchSize_,
+                           LEARNING_RATE,
+                           &LayerConv_);
         batchSize_ = 0;
     }
 }
