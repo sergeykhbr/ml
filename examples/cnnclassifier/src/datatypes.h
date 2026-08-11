@@ -22,11 +22,11 @@
 //#define SIGMOID_ENA
 #define MINI_BATCH_SIZE 1
 
-const int TRAIN_EPOCH_TOTAL = 50;
+const int TRAIN_EPOCH_TOTAL = 20;
 
 // Input parameters:
 const int DATA_SET_SIZE = 1024;
-const float LEARNING_RATE = 0.05f;
+const float LEARNING_RATE = 0.01f;
 // ADAM method
 const float ADAM_ALPHA = LEARNING_RATE;
 const float ADAM_BETA1 = 0.9f;
@@ -78,10 +78,15 @@ struct ConvLayerType {
     int prevdim;    // Previous layer dimension
     int dim;        // Current layer dimension
     float K[NUM_FILTERS * KERNEL_DIM];
-    float batchK[NUM_FILTERS * KERNEL_DIM];
     float B[NUM_FILTERS];
-    float batchB[NUM_FILTERS];
     float Z[FLATTEN_DIM];       // 
     float A[FLATTEN_DIM];       // Activation: A = ReLU(Z)
     float dZ[FLATTEN_DIM];      // backward propogation gradient
+    // Batching
+    float batchK[NUM_FILTERS * KERNEL_DIM];
+    float adamK_M[NUM_FILTERS * KERNEL_DIM]; // First moment (Direct LP filter)
+    float adamK_V[NUM_FILTERS * KERNEL_DIM]; // Second moment (Noise power LP filter)
+    float batchB[NUM_FILTERS];
+    float adamB_M[NUM_FILTERS]; // First moment (Direct LP filter)
+    float adamB_V[NUM_FILTERS]; // Second moment (Noise power LP filter)
 };

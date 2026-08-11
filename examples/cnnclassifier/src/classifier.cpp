@@ -28,6 +28,8 @@ CNNClassifier::CNNClassifier(std::mt19937 &gen) {
     for (int i = 0; i < NUM_FILTERS * KERNEL_DIM; i++) {
         LayerConv_.K[i] = dist(gen);
         LayerConv_.batchK[i] = 0.0f;
+        LayerConv_.adamK_M[i] = 0.0f;
+        LayerConv_.adamK_V[i] = 0.0f;
     }
     for (int i = 0; i < FLATTEN_DIM; i++) {
         LayerConv_.Z[i] = 0.0f;
@@ -36,6 +38,8 @@ CNNClassifier::CNNClassifier(std::mt19937 &gen) {
     for (int i = 0; i < NUM_FILTERS; i++) {
         LayerConv_.B[i] = 0;
         LayerConv_.batchB[i] = 0;
+        LayerConv_.adamB_M[i] = 0;
+        LayerConv_.adamB_V[i] = 0;
     }
 
     int InDim = INPUT_DIM;
@@ -72,34 +76,35 @@ CNNClassifier::CNNClassifier(std::mt19937 &gen) {
         InDim = LAYER_DIM[i];
     }*/
     InDim = FLATTEN_DIM;
+    {
+        OutputData_.prevdim = InDim;
+        OutputData_.dim = OUTPUT_DIM;
+        OutputData_.W = new float [InDim * OUTPUT_DIM];
+        OutputData_.B = new float [OUTPUT_DIM];
+        OutputData_.Z = new float [OUTPUT_DIM];
+        OutputData_.A = new float [OUTPUT_DIM];
+        OutputData_.dZ = new float [OUTPUT_DIM];
+        OutputData_.batchW = new float [InDim * OUTPUT_DIM];
+        OutputData_.adamW_M = new float [InDim * OUTPUT_DIM];
+        OutputData_.adamW_V = new float [InDim * OUTPUT_DIM];
+        OutputData_.batchB = new float [OUTPUT_DIM];
+        OutputData_.adamB_M = new float [OUTPUT_DIM];
+        OutputData_.adamB_V = new float [OUTPUT_DIM];
 
-    OutputData_.prevdim = InDim;
-    OutputData_.dim = OUTPUT_DIM;
-    OutputData_.W = new float [InDim * OUTPUT_DIM];
-    OutputData_.B = new float [OUTPUT_DIM];
-    OutputData_.Z = new float [OUTPUT_DIM];
-    OutputData_.A = new float [OUTPUT_DIM];
-    OutputData_.dZ = new float [OUTPUT_DIM];
-    OutputData_.batchW = new float [InDim * OUTPUT_DIM];
-    OutputData_.adamW_M = new float [InDim * OUTPUT_DIM];
-    OutputData_.adamW_V = new float [InDim * OUTPUT_DIM];
-    OutputData_.batchB = new float [OUTPUT_DIM];
-    OutputData_.adamB_M = new float [OUTPUT_DIM];
-    OutputData_.adamB_V = new float [OUTPUT_DIM];
-
-    float scale = std::sqrt(2.0f / InDim);
-    std::normal_distribution<float> dist(0.0f, scale);
-    for (int ii = 0; ii < InDim * OUTPUT_DIM; ++ii) {
-        OutputData_.W[ii] = dist(gen);
-        OutputData_.batchW[ii] = 0.0f;
-        OutputData_.adamW_M[ii] = 0.0f;
-        OutputData_.adamW_V[ii] = 0.0f;
-    }
-    for (int ii = 0; ii < OUTPUT_DIM; ++ii) {
-        OutputData_.B[ii] = 0.0f;
-        OutputData_.batchB[ii] = 0.0f;
-        OutputData_.adamB_M[ii] = 0.0f;
-        OutputData_.adamB_V[ii] = 0.0f;
+        scale = std::sqrt(2.0f / InDim);
+        std::normal_distribution<float> dist(0.0f, scale);
+        for (int ii = 0; ii < InDim * OUTPUT_DIM; ++ii) {
+            OutputData_.W[ii] = dist(gen);
+            OutputData_.batchW[ii] = 0.0f;
+            OutputData_.adamW_M[ii] = 0.0f;
+            OutputData_.adamW_V[ii] = 0.0f;
+        }
+        for (int ii = 0; ii < OUTPUT_DIM; ++ii) {
+            OutputData_.B[ii] = 0.0f;
+            OutputData_.batchB[ii] = 0.0f;
+            OutputData_.adamB_M[ii] = 0.0f;
+            OutputData_.adamB_V[ii] = 0.0f;
+        }
     }
     batchSize_ = 0;
     batchNum_ = 0;
@@ -186,6 +191,19 @@ void CNNClassifier::activationSoftmax(float *IN, float *OUT, int sz) {
     for (int i = 0; i < sz; i++) {
         OUT[i] = std::exp(IN[i] - m) / sum_exp;
     }
+}
+
+float CNNClassifier::correlateImage(float *img, int x, int y, float *filt) {
+    float sum = 0.0f;
+    // Slide the 3x3 patch window
+    for (int ky = 0; ky = KERNEL_SIZE; ky++) {
+        for (int kx = 0; kx = KERNEL_SIZE; kx++) {
+            float pixel = img[(y + ky) * IMG_W + x + kx];
+            float weight = filt[ky * KERNEL_SIZE + kx];
+            sum += pixel * weight;
+        }
+    }
+    return sum;
 }
 
 void CNNClassifier::forwardPass(float *IN, float *OUT) {
@@ -353,17 +371,51 @@ void CNNClassifier::batchIncrement(int batchNum,
     memset(layer->batchB, 0, layer->dim * sizeof(float));
 }
 
-float CNNClassifier::correlateImage(float *img, int x, int y, float *filt) {
-    float sum = 0.0f;
-    // Slide the 3x3 patch window
-    for (int ky = 0; ky = KERNEL_SIZE; ky++) {
-        for (int kx = 0; kx = KERNEL_SIZE; kx++) {
-            float pixel = img[(y + ky) * IMG_W + x + kx];
-            float weight = filt[ky * KERNEL_SIZE + kx];
-            sum += pixel * weight;
-        }
+void CNNClassifier::batchIncrement(int batchNum,
+                                    int batchSize,
+                                    float learning_rate,
+                                    ConvLayerType *layer) {
+    float grad;
+    float beta1_correction = 1.0f - std::pow(ADAM_BETA1, batchNum);
+    float beta2_correction = 1.0f - std::pow(ADAM_BETA2, batchNum);
+    for (int i = 0; i < NUM_FILTERS * KERNEL_DIM; i++) {
+        grad = layer->batchK[i] / batchSize;
+#if 1
+        layer->K[i] -= learning_rate * grad;
+#else
+        // Update first moment (direct LP filter)
+        layer->adamW_M[i] = ADAM_BETA1 * layer->adamW_M[i]
+                        + (1.0f - ADAM_BETA1) * grad;
+        // Update second moment (Noise power LP filter)
+        layer->adamW_V[i] = ADAM_BETA2 * layer->adamW_V[i]
+                        + (1.0f - ADAM_BETA2) * grad * grad;
+        // Bias correction
+        float m_hat = layer->adamW_M[i] / beta1_correction;
+        float v_hat = layer->adamW_V[i] / beta2_correction;
+
+        layer->W[i] -= (ADAM_ALPHA / (std::sqrtf(v_hat) + ADAM_EPSILON)) * m_hat;
+#endif
     }
-    return sum;
+    for (int i = 0; i < NUM_FILTERS; i++) {
+        grad = layer->batchB[i] / batchSize;
+#if 1
+        layer->B[i] -= learning_rate * grad;
+#else
+        // Update first moment (direct LP filter)
+        layer->adamB_M[i] = ADAM_BETA1 * layer->adamB_M[i]
+                        + (1.0f - ADAM_BETA1) * grad;
+        // Update second moment (Noise power LP filter)
+        layer->adamB_V[i] = ADAM_BETA2 * layer->adamB_V[i]
+                        + (1.0f - ADAM_BETA2) * grad * grad;
+        // Bias correction
+        float m_hat = layer->adamB_M[i] / beta1_correction;
+        float v_hat = layer->adamB_V[i] / beta2_correction;
+
+        layer->B[i] -= (ADAM_ALPHA / (std::sqrtf(v_hat) + ADAM_EPSILON)) * m_hat;
+#endif
+    }
+    memset(layer->batchK, 0, NUM_FILTERS * KERNEL_DIM * sizeof(float));
+    memset(layer->batchB, 0, NUM_FILTERS * sizeof(float));
 }
 
 void CNNClassifier::trainStep(DataPoint *datapoint) {

@@ -46,15 +46,14 @@ class CNNClassifier {
                         int batchSize,
                         float learning_rate,
                         LayerDataType *layer);
+    void batchIncrement(int batchNum,
+                        int batchSize,
+                        float learning_rate,
+                        ConvLayerType *layer);
 
  private:
-    // Conv Layer: 3 filters of size 3x3
-    //float K[NUM_FILTERS * KERNEL_SIZE * KERNEL_SIZE];
-    //float conv_bias[NUM_FILTERS];
-
     ConvLayerType LayerConv_;
-
-    LayerDataType LayerData_[LAYER_NUM];
+    //LayerDataType LayerData_[LAYER_NUM];
     LayerDataType OutputData_;
 
     int batchSize_;   // counter from 0 to Batches Total - 1

@@ -18,7 +18,7 @@
 #include <QDir>
 
 PlotWidget::PlotWidget(const std::vector<DataPoint>& dots,
-                       MoonClassifier *classifier,
+                       CNNClassifier *classifier,
                        uint32_t seed,
                        QWidget* parent) 
     : QWidget(parent), dots_(dots), classifier_(classifier), seed_(seed)

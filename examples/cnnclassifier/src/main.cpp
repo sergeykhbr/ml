@@ -40,11 +40,11 @@ int main(int argc, char *argv[]) {
     std::mt19937 gen(rd());             // start high-quility Mersenne Twister math engine (range 32-bits uint32_t)
 #endif
     std::vector<DataPoint> dataset;
-    generate_data_set(gen, dataset);
+    generate_data_set(gen, dataset, 16);
 
-    MoonClassifier *model = new MoonClassifier(gen);
+    CNNClassifier *model = new CNNClassifier(gen);
     PlotWidget plot(dataset, model, seed);
-    plot.setWindowTitle("moonclsr");
+    plot.setWindowTitle("CNN");
     plot.resize(320, 240);
 
     std::cout << "--- Starting Training Optimization ---" << std::endl;
@@ -54,11 +54,8 @@ int main(int argc, char *argv[]) {
         std::shuffle(dataset.begin(), dataset.end(), gen);
         
         std::cout << "\n--- Epoch " << epoch << " ---" << std::endl;
-        // Print the math state for the first point of the epoch to track progression
-        model->trainStep(&dataset[0]);
-
         // Train silently on the rest of the points
-        for (size_t i = 1; i < dataset.size(); ++i) {
+        for (size_t i = 0; i < dataset.size(); ++i) {
             model->trainStep(&dataset[i]);
         }
 

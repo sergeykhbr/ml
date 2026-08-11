@@ -35,7 +35,7 @@
 class PlotWidget : public QWidget {
  public:
     explicit PlotWidget(const std::vector<DataPoint>& dots,
-                        MoonClassifier *classifier,
+                        CNNClassifier *classifier,
                         uint32_t seed,
                         QWidget* parent = nullptr);
 
@@ -58,7 +58,7 @@ class PlotWidget : public QWidget {
     uint32_t seed_;
     const std::vector<DataPoint> &dots_;
     std::list<QImage *> listImages_;
-    MoonClassifier *classifier_;
+    CNNClassifier *classifier_;
     QTimer *tmr_;
     float scalex_;
     float scaley_;
