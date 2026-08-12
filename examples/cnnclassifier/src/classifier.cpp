@@ -196,8 +196,8 @@ void CNNClassifier::activationSoftmax(float *IN, float *OUT, int sz) {
 float CNNClassifier::correlateImage(float *img, int x, int y, float *filt) {
     float sum = 0.0f;
     // Slide the 3x3 patch window
-    for (int ky = 0; ky = KERNEL_SIZE; ky++) {
-        for (int kx = 0; kx = KERNEL_SIZE; kx++) {
+    for (int ky = 0; ky < KERNEL_SIZE; ky++) {
+        for (int kx = 0; kx < KERNEL_SIZE; kx++) {
             float pixel = img[(y + ky) * IMG_W + x + kx];
             float weight = filt[ky * KERNEL_SIZE + kx];
             sum += pixel * weight;
@@ -207,7 +207,7 @@ float CNNClassifier::correlateImage(float *img, int x, int y, float *filt) {
 }
 
 void CNNClassifier::forwardPass(float *IN, float *OUT) {
-    LayerDataType *layer;
+    ConvLayerType *layer = &LayerConv_;
     int InDim = INPUT_DIM;
 
     for (int f = 0; f < NUM_FILTERS; ++f) {
@@ -215,10 +215,10 @@ void CNNClassifier::forwardPass(float *IN, float *OUT) {
 
         for (int out_y = 0; out_y < OUT_H; out_y++) {
             for (int out_x = 0; out_x < OUT_W; out_x++) {
-                float sum = correlateImage(IN, out_x, out_y, &LayerConv_.K[f * KERNEL_DIM]);
+                float sum = correlateImage(IN, out_x, out_y, &layer->K[f * KERNEL_DIM]);
                 int out_idx = feature_map_offset + out_y * OUT_W + out_x;
-                LayerConv_.Z[out_idx] = sum + LayerConv_.B[f];
-                LayerConv_.A[out_idx] = ReLU(LayerConv_.Z[out_idx]);
+                layer->Z[out_idx] = sum + layer->B[f];
+                layer->A[out_idx] = ReLU(layer->Z[out_idx]);
             }
         }
     }
@@ -380,25 +380,25 @@ void CNNClassifier::batchIncrement(int batchNum,
     float beta2_correction = 1.0f - std::pow(ADAM_BETA2, batchNum);
     for (int i = 0; i < NUM_FILTERS * KERNEL_DIM; i++) {
         grad = layer->batchK[i] / batchSize;
-#if 1
+#if 0
         layer->K[i] -= learning_rate * grad;
 #else
         // Update first moment (direct LP filter)
-        layer->adamW_M[i] = ADAM_BETA1 * layer->adamW_M[i]
+        layer->adamK_M[i] = ADAM_BETA1 * layer->adamK_M[i]
                         + (1.0f - ADAM_BETA1) * grad;
         // Update second moment (Noise power LP filter)
-        layer->adamW_V[i] = ADAM_BETA2 * layer->adamW_V[i]
+        layer->adamK_V[i] = ADAM_BETA2 * layer->adamK_V[i]
                         + (1.0f - ADAM_BETA2) * grad * grad;
         // Bias correction
-        float m_hat = layer->adamW_M[i] / beta1_correction;
-        float v_hat = layer->adamW_V[i] / beta2_correction;
+        float m_hat = layer->adamK_M[i] / beta1_correction;
+        float v_hat = layer->adamK_V[i] / beta2_correction;
 
-        layer->W[i] -= (ADAM_ALPHA / (std::sqrtf(v_hat) + ADAM_EPSILON)) * m_hat;
+        layer->K[i] -= (ADAM_ALPHA / (std::sqrtf(v_hat) + ADAM_EPSILON)) * m_hat;
 #endif
     }
     for (int i = 0; i < NUM_FILTERS; i++) {
         grad = layer->batchB[i] / batchSize;
-#if 1
+#if 0
         layer->B[i] -= learning_rate * grad;
 #else
         // Update first moment (direct LP filter)

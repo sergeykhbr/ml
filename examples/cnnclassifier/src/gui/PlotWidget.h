@@ -34,31 +34,30 @@
 
 class PlotWidget : public QWidget {
  public:
-    explicit PlotWidget(const std::vector<DataPoint>& dots,
-                        CNNClassifier *classifier,
+    explicit PlotWidget(std::mt19937 &gen,
                         uint32_t seed,
                         QWidget* parent = nullptr);
 
-    void saveEpoch(int epoch);
-
  public slots:
-    void onTimeout() { update(); }
+    void onTimeout();
 
  protected:
     virtual void paintEvent(QPaintEvent* event) override;
     virtual void showEvent(QShowEvent *event) override;
 
  private:
-    void point2xy(QPoint &p, float *xy);
-    QPoint xy2point(float x, float y);
-    QColor probability2color(float *vec);
-    void drawImage(QImage &img, int epoch, QColor *frame);
+    QColor pix2color(float px);
+    QColor filt2color(float k);
+    void drawInput(QImage &img, int epoch, const DataPoint *indata);
+    void drawFilters(QImage &img, int fnum, float *k, int kw, int kh);
+    void drawProbabilities(QImage &img, int label, float *A, int sz);
 
  private:
     uint32_t seed_;
-    const std::vector<DataPoint> &dots_;
+    std::mt19937 &gen_;
     std::list<QImage *> listImages_;
-    CNNClassifier *classifier_;
+    QImage img_;
+    CNNClassifier classifier_;
     QTimer *tmr_;
     float scalex_;
     float scaley_;

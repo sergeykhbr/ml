@@ -23,10 +23,6 @@
 #include <random>
 #include <iostream>
 
-void generate_data_set(std::mt19937 &gen,
-                       std::vector<DataPoint> &dataset,
-                       int sample_per_class);
-
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);       
 
@@ -39,32 +35,13 @@ int main(int argc, char *argv[]) {
     seed = rd();
     std::mt19937 gen(rd());             // start high-quility Mersenne Twister math engine (range 32-bits uint32_t)
 #endif
-    std::vector<DataPoint> dataset;
-    generate_data_set(gen, dataset, 16);
 
-    CNNClassifier *model = new CNNClassifier(gen);
-    PlotWidget plot(dataset, model, seed);
+    PlotWidget plot(gen, seed);
     plot.setWindowTitle("CNN");
     plot.resize(320, 240);
 
-    std::cout << "--- Starting Training Optimization ---" << std::endl;
-    // Run training over 20 epochs
-    for (int epoch = 1; epoch <= TRAIN_EPOCH_TOTAL; ++epoch) {
-        // Shuffle the tracking points each epoch to maintain optimization stability
-        std::shuffle(dataset.begin(), dataset.end(), gen);
-        
-        std::cout << "\n--- Epoch " << epoch << " ---" << std::endl;
-        // Train silently on the rest of the points
-        for (size_t i = 0; i < dataset.size(); ++i) {
-            model->trainStep(&dataset[i]);
-        }
-
-        plot.saveEpoch(epoch);
-    }
-
     plot.show();
     app.exec();
-    delete model;
 
     return 0;
 }
