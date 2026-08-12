@@ -51,6 +51,7 @@ class CNNClassifier {
                         float learning_rate,
                         ConvLayerType *layer);
 
+    float *getpActivationMap(int n) { return &LayerConv_.A[n * OUT_W * OUT_H]; }
     float *getpFilter(int n) { return &LayerConv_.K[n * KERNEL_DIM]; }
     float *getpResult() { return OutputData_.A; }
  private:

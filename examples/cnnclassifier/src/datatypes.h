@@ -18,7 +18,7 @@
 
 #include <cmath>
 
-#define FIXED_SEED 0x11223344
+//#define FIXED_SEED 0x11223344
 //#define SIGMOID_ENA
 #define MINI_BATCH_SIZE 1
 

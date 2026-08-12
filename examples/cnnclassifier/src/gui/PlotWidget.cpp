@@ -142,13 +142,37 @@ void PlotWidget::drawFilters(QImage &img, int fnum, float *k, int kw, int kh) {
     }
 }
 
+void PlotWidget::drawActivationMap(QImage &img, int label, int fnum, float *A, int kw, int kh) {
+    QPainter painter(&img);
+
+    int w0 = 100;
+    int h0 = 0;
+    int scale = 5;
+    QColor clr;
+
+    for (int f = 0; f < fnum; f++) {
+
+        float *A = classifier_.getpActivationMap(f);
+        h0 = label * (scale * kh + 2);
+        w0 = 100 + f * (scale * kw + 2);
+        for (int w = 0; w < kw; w++) {
+            for (int h = 0; h < kh; h++) {
+                clr = filt2color(A[w*kw + h]);
+                painter.setPen(clr);
+                painter.setBrush(clr);
+                painter.drawRect(w0 + scale*w, h0 + scale*h, scale, scale);
+            }
+        }
+    }
+}
+
 void PlotWidget::drawProbabilities(QImage &img, int label, float *A, int sz) {
     QPainter painter(&img);
     QString str;
     for (int i = 0 ; i < sz; i++) {
         painter.setPen(Qt::gray);
         painter.setBrush(Qt::white);
-        painter.drawRect(98, 10+20*i, 50, 20);  // erase text
+        painter.drawRect(198, 10+20*i, 50, 20);  // erase text
 
 
         str = QString("P: %1").arg(A[i], 0, 'f', 2);
@@ -157,7 +181,7 @@ void PlotWidget::drawProbabilities(QImage &img, int label, float *A, int sz) {
         }
 
         painter.setPen(Qt::black);
-        painter.drawText(100, 20+20*i, str);
+        painter.drawText(200, 20+20*i, str);
     }
 }
 
@@ -182,6 +206,7 @@ void PlotWidget::onTimeout() {
     classifier_.trainStep(&data);
     drawInput(img_, 1, &data);
     drawFilters(img_, NUM_FILTERS, classifier_.getpFilter(0), KERNEL_SIZE, KERNEL_SIZE);
+    drawActivationMap(img_, data.label, NUM_FILTERS, classifier_.getpActivationMap(0), OUT_W, OUT_H);
     drawProbabilities(img_, data.label, classifier_.getpResult(), OUTPUT_DIM);
 
     update();

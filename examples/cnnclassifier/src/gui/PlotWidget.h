@@ -50,6 +50,7 @@ class PlotWidget : public QWidget {
     QColor filt2color(float k);
     void drawInput(QImage &img, int epoch, const DataPoint *indata);
     void drawFilters(QImage &img, int fnum, float *k, int kw, int kh);
+    void drawActivationMap(QImage &img, int label, int fnum, float *A, int kw, int kh);
     void drawProbabilities(QImage &img, int label, float *A, int sz);
 
  private:
