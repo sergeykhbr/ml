@@ -16,6 +16,7 @@
 
 #include "PlotWidget.h"
 #include <QDir>
+static const int TITLE_SPACE_H = 24;
 
 void generate_data(std::mt19937 &gen,
                    DataPoint *data);
@@ -26,7 +27,7 @@ PlotWidget::PlotWidget(std::mt19937 &gen,
     : QWidget(parent),
     gen_(gen),
     classifier_(gen),
-    img_(320, 240, QImage::Format_ARGB32_Premultiplied),
+    img_(480, 240, QImage::Format_ARGB32_Premultiplied),
     seed_(seed)
 {
     scalex_ = 0;
@@ -54,25 +55,27 @@ QColor PlotWidget::filt2color(float k) {
     int g = 0;
     int b = 0;
     if (k < 0) {
-        b = static_cast<int>(-k * 169);
+        b = static_cast<int>(-k * 255);
     } else {
-        r = static_cast<int>(k * 169);
+        r = static_cast<int>(k * 255);
     }
     return QColor(qRgb(r, g, b));
 }
 
-void PlotWidget::drawInput(QImage &img, int epoch, const DataPoint *data) {
-    QPainter painter(&img);
+QColor PlotWidget::map2gray(float k) {
+    int rgb = 0;
+    if (k < 0) {
+        rgb = static_cast<int>(-k * 255);
+    } else {
+        rgb = static_cast<int>(k * 255);
+    }
+    return QColor(qRgb(rgb, rgb, rgb));
+}
 
-    painter.setRenderHint(QPainter::Antialiasing);
-
-    QSize sz = size();
-    int width = sz.width();
-    int height = sz.height();
-
-    int w0 = 0;
-    int h0 = data->label * IMG_H;
-    int scale = 4;
+void PlotWidget::drawInput(QPainter &painter, const DataPoint *data) {
+    int scale = 5;
+    int w0 = 2;
+    int h0 = TITLE_SPACE_H + data->label * (scale * IMG_H + 2);
     QColor clr;
     for (int w = 0; w < IMG_W; w++) {
         for (int h = 0; h < IMG_H; h++) {
@@ -80,7 +83,7 @@ void PlotWidget::drawInput(QImage &img, int epoch, const DataPoint *data) {
             painter.setPen(clr);
             painter.setBrush(clr);
             //painter.drawPoint(w + w0, h + h0);
-            painter.drawRect(scale*(w+w0), scale*(h+h0), scale, scale);
+            painter.drawRect(w0 + scale*w, h0 + scale*h, scale, scale);
         }
     }
 
@@ -120,44 +123,18 @@ void PlotWidget::drawInput(QImage &img, int epoch, const DataPoint *data) {
     painter.drawText(80, 12*4, QString("LearnRate: %1").arg(LEARNING_RATE, 0, 'f', 2));*/
 }
 
-void PlotWidget::drawFilters(QImage &img, int fnum, float *k, int kw, int kh) {
-    QPainter painter(&img);
-    
-    int w0 = 60;
-    int h0 = 0;
+void PlotWidget::drawFilters(QPainter &painter, int fnum, float *k, int kw, int kh) {
+    int w0 = 80;
+    int h0;
     int scale = 10;
     QColor clr;
     for (int f = 0; f < fnum; f++) {
 
         float *K = classifier_.getpFilter(f);
-        h0 = f * (scale * kh + 5);
+        h0 = TITLE_SPACE_H + 50 + f * (scale * kh + 5);
         for (int w = 0; w < kw; w++) {
             for (int h = 0; h < kh; h++) {
                 clr = filt2color(K[w*kw + h]);
-                painter.setPen(clr);
-                painter.setBrush(clr);
-                painter.drawRect(w0+scale*w, h0 + scale*h, scale, scale);
-            }
-        }
-    }
-}
-
-void PlotWidget::drawActivationMap(QImage &img, int label, int fnum, float *A, int kw, int kh) {
-    QPainter painter(&img);
-
-    int w0 = 100;
-    int h0 = 0;
-    int scale = 5;
-    QColor clr;
-
-    for (int f = 0; f < fnum; f++) {
-
-        float *A = classifier_.getpActivationMap(f);
-        h0 = label * (scale * kh + 2);
-        w0 = 100 + f * (scale * kw + 2);
-        for (int w = 0; w < kw; w++) {
-            for (int h = 0; h < kh; h++) {
-                clr = filt2color(A[w*kw + h]);
                 painter.setPen(clr);
                 painter.setBrush(clr);
                 painter.drawRect(w0 + scale*w, h0 + scale*h, scale, scale);
@@ -166,22 +143,88 @@ void PlotWidget::drawActivationMap(QImage &img, int label, int fnum, float *A, i
     }
 }
 
-void PlotWidget::drawProbabilities(QImage &img, int label, float *A, int sz) {
-    QPainter painter(&img);
-    QString str;
-    for (int i = 0 ; i < sz; i++) {
-        painter.setPen(Qt::gray);
-        painter.setBrush(Qt::white);
-        painter.drawRect(198, 10+20*i, 50, 20);  // erase text
+void PlotWidget::drawActivationMap(QPainter &painter, int label, int fnum, float *A, int kw, int kh) {
+    int w0;
+    int h0 = 0;
+    int scale = 5;
+    QColor clr;
 
+    for (int f = 0; f < fnum; f++) {
 
-        str = QString("P: %1").arg(A[i], 0, 'f', 2);
-        if (i == label) {
-            str += "*";
+        float *A = classifier_.getpActivationMap(f);
+        h0 = TITLE_SPACE_H + 4 + label * (scale * kh + 12);
+        w0 = 120 + f * (scale * kw + 2);
+        for (int w = 0; w < kw; w++) {
+            for (int h = 0; h < kh; h++) {
+                clr = map2gray(A[w*kw + h]);
+                painter.setPen(clr);
+                painter.setBrush(clr);
+                painter.drawRect(w0 + scale*w, h0 + scale*h, scale, scale);
+            }
         }
+    }
+}
 
-        painter.setPen(Qt::black);
-        painter.drawText(200, 20+20*i, str);
+void PlotWidget::drawP(QPainter &p, std::list<OutDataType> &data, int x, int y, int width, int height) {
+    int w = width;
+    int h = height;
+    QColor clr[OUTPUT_DIM] = {Qt::red, Qt::blue, Qt::green};
+
+    p.setPen(Qt::gray);
+    p.setBrush(Qt::white);
+    p.drawRect(x, y, w, h);  // erase text
+
+    p.setPen(Qt::black);
+    // coordinate axis
+    p.setPen(Qt::gray);
+    p.setBrush(Qt::white);
+    p.drawRect(x-20, y, 20, 12);  // erase text
+    p.drawRect(x-20, y + h - 12, 20, 12);  // erase text
+    p.setPen(Qt::black);
+    p.drawText(x-18, y + 11, QString("1.0"));
+    p.drawText(x-18, y + h-1, QString("0.0"));
+
+    for (int i = 0; i < OUTPUT_DIM; i++) {
+        int xmax = std::min((int)data.size(), w-1);
+        int xstart = 0;
+        int ystart = 0;
+        int yend;
+        p.setPen(clr[i]);
+        for (auto &d : data) {
+            yend = h - static_cast<int>(d.A[i] * (h - 1) + 0.5f);
+            p.drawLine(x + xstart,
+                       y + ystart,
+                       x + xstart+1,
+                       y + yend);
+            xstart++;
+            ystart = yend;
+        }
+    }
+}
+
+void PlotWidget::drawProbabilities(QPainter &painter, int label, float *A, int sz) {
+    QString str;
+    const int plot_w = 100;
+    const int plot_h = 70;
+    for (int i = 0 ; i < sz; i++) {
+
+        //str = QString("P: %1").arg(P->A[i], 0, 'f', 2);
+        if (i == label) {
+            //str += "*";
+            OutDataType P;
+            for (int i = 0; i < OUTPUT_DIM; i++) {
+                P.A[i] = A[i];
+            }
+            if (P_[i].size() < plot_w) {
+                P_[i].push_back(P);
+            }
+            drawP(painter,
+                  P_[i],
+                  340,
+                  TITLE_SPACE_H + i*(plot_h + 2),
+                  plot_w,
+                  plot_h);
+        }
     }
 }
 
@@ -189,12 +232,17 @@ void PlotWidget::paintEvent(QPaintEvent* event) {
     Q_UNUSED(event);
     QPainter painter(this);
     painter.drawImage(0, 0, img_);
-    /*QImage *img = *std::next(listImages_.begin(), frameCnt_);
-    painter.drawImage(0, 0, *img);
+}
 
-    if (++frameCnt_ >= listImages_.size()) {
-        frameCnt_ = 0;
-    }*/
+void PlotWidget::saveToFile(QImage &img, int epoch) {
+    // save image:
+    QDir dir(tr("screenshots"));
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    QString filename = QString("frame_%1.png").arg(epoch, 4, 10, QChar('0'));
+    QString fullname = dir.filePath(filename);
+    img.save(fullname);
 }
 
 void PlotWidget::onTimeout() {
@@ -202,12 +250,33 @@ void PlotWidget::onTimeout() {
     
     DataPoint data;
     generate_data(gen_, &data);
+    frameCnt_++;
 
     classifier_.trainStep(&data);
-    drawInput(img_, 1, &data);
-    drawFilters(img_, NUM_FILTERS, classifier_.getpFilter(0), KERNEL_SIZE, KERNEL_SIZE);
-    drawActivationMap(img_, data.label, NUM_FILTERS, classifier_.getpActivationMap(0), OUT_W, OUT_H);
-    drawProbabilities(img_, data.label, classifier_.getpResult(), OUTPUT_DIM);
 
+
+    QPainter painter(&img_);
+    drawInput(painter, &data);
+    drawFilters(painter, NUM_FILTERS, classifier_.getpFilter(0), KERNEL_SIZE, KERNEL_SIZE);
+    drawActivationMap(painter, data.label, NUM_FILTERS, classifier_.getpActivationMap(0), OUT_W, OUT_H);
+    drawProbabilities(painter, data.label, classifier_.getpResult(), OUTPUT_DIM);
+
+    painter.setPen(Qt::white);
+    painter.setBrush(Qt::white);
+    painter.drawRect(0, 0, img_.width(), TITLE_SPACE_H);
+    painter.setPen(Qt::black);
+    QString title = QString("Epoch: %1").arg(frameCnt_);
+    painter.drawText(2, 12, title);
+
+    painter.drawText(72, 12, QString("Input:"));
+
+    QString type[OUTPUT_DIM] = {"circle", "square", "triangle"};
+    QColor clr[OUTPUT_DIM] = {Qt::red, Qt::blue, Qt::green};
+    painter.setPen(clr[data.label]);
+    painter.drawText(110, 12, type[data.label]);
+
+    if (frameCnt_ < 210) {
+        saveToFile(img_, frameCnt_);
+    }
     update();
 }

@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 
     PlotWidget plot(gen, seed);
     plot.setWindowTitle("CNN");
-    plot.resize(320, 240);
+    plot.resize(480, 240);
 
     plot.show();
     app.exec();

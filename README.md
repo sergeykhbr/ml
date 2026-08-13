@@ -1,6 +1,8 @@
 # Machine Learning examples
 
-## Single layer SGD
+## Simple classifiers
+
+### Single layer SGD
 
 - Stochastic Gradient Descent (SGD) method of learning
 - Rectified Linear Unit (ReLU) activation function
@@ -11,7 +13,7 @@
 </p>
 
 Pure SGD has a high probability of generating a degenerated border, which can be obeserved
-over multiple runs. The Solution is Mini-Batch Gradient Descent method. Skip LeakyReLU.
+over multiple runs. The Solution is Mini-Batch Gradient Descent method or LeakyReLU activation.
 
 ### Two layers SGD
 
@@ -45,3 +47,14 @@ The second layer increases "probability contrast".
 
   - Simple mini-batch optimizer uses increased learning rate: 0.05 * sqrt(32), otherwise learning is too slow
   - Adam shows significantly better results in all cases.
+
+## Convolutional Network (CNN)
+
+  - Input layer 14x14 pixels. Input pictures of circles, squares and trianlges in random order
+  - Input Convolutional Layer. Three separate 3x3 filters
+  - Single Feature map layer 12x12 pixels after passing LeakyReLU activation
+  - Classification head / Softmax probabilities
+
+<p align="center">
+  <img src="docs/pics/cnn_14x14_f3_o3.webp" />
+</p>

@@ -152,11 +152,16 @@ void CNNClassifier::forwardLayer(float *IN, int isz,
 }
 
 float CNNClassifier::ReLU(float IN) {
-    return std::max(0.0f, IN);
+    //return std::max(0.0f, IN);
+
+    // LeakyReLU:
+    return IN > 0.0f ? IN : 0.01f * IN;
 }
 
 float CNNClassifier::derivativeReLU(float IN) {
-    return IN > 0.0f ? 1.0f : 0.0f;
+//    return IN > 0.0f ? 1.0f : 0.0f;
+    // LeakyReLU:
+    return IN > 0.0f ? 1.0f : 0.01f;
 }
 
 float CNNClassifier::Sigmoid(float IN) {
@@ -218,7 +223,11 @@ void CNNClassifier::forwardPass(float *IN, float *OUT) {
                 float sum = correlateImage(IN, out_x, out_y, &layer->K[f * KERNEL_DIM]);
                 int out_idx = feature_map_offset + out_y * OUT_W + out_x;
                 layer->Z[out_idx] = sum + layer->B[f];
+#ifdef SIGMOID_ENA
+                layer->A[out_idx] = Sigmoid(layer->Z[out_idx]);
+#else
                 layer->A[out_idx] = ReLU(layer->Z[out_idx]);
+#endif
             }
         }
     }
