@@ -23,19 +23,21 @@
 CNNClassifier::CNNClassifier(std::mt19937 &gen) {
     float scale = std::sqrt(2.0f / KERNEL_DIM);
     std::normal_distribution<float> dist(0.0f, scale);
-    LayerConv_.dim = FLATTEN_DIM;
     LayerConv_.prevdim = IMG_H * IMG_W;
-    for (int i = 0; i < NUM_FILTERS * KERNEL_DIM; i++) {
+    LayerConv_.ksz = KERNEL_SIZE;
+    LayerConv_.knum = NUM_FILTERS;
+    LayerConv_.dim = NUM_FILTERS * OUT_W * OUT_H;
+    for (int i = 0; i < LayerConv_.knum * LayerConv_.ksz * LayerConv_.ksz; i++) {
         LayerConv_.K[i] = dist(gen);
         LayerConv_.batchK[i] = 0.0f;
         LayerConv_.adamK_M[i] = 0.0f;
         LayerConv_.adamK_V[i] = 0.0f;
     }
-    for (int i = 0; i < FLATTEN_DIM; i++) {
+    for (int i = 0; i < LayerConv_.dim; i++) {
         LayerConv_.Z[i] = 0.0f;
         LayerConv_.A[i] = 0.0f;
     }
-    for (int i = 0; i < NUM_FILTERS; i++) {
+    for (int i = 0; i < LayerConv_.knum; i++) {
         LayerConv_.B[i] = 0;
         LayerConv_.batchB[i] = 0;
         LayerConv_.adamB_M[i] = 0;
@@ -215,18 +217,19 @@ void CNNClassifier::forwardPass(float *IN, float *OUT) {
     ConvLayerType *layer = &LayerConv_;
     int InDim = INPUT_DIM;
 
+    float *Z = layer->Z;
+    float *A = layer->A;
     for (int f = 0; f < NUM_FILTERS; ++f) {
-        int feature_map_offset = f * OUT_W * OUT_H;
-
+        //int feature_map_offset = f * OUT_W * OUT_H;
         for (int out_y = 0; out_y < OUT_H; out_y++) {
             for (int out_x = 0; out_x < OUT_W; out_x++) {
                 float sum = correlateImage(IN, out_x, out_y, &layer->K[f * KERNEL_DIM]);
-                int out_idx = feature_map_offset + out_y * OUT_W + out_x;
-                layer->Z[out_idx] = sum + layer->B[f];
+                //int out_idx = feature_map_offset + out_y * OUT_W + out_x;
+                *Z = sum + layer->B[f];
 #ifdef SIGMOID_ENA
-                layer->A[out_idx] = Sigmoid(layer->Z[out_idx]);
+                *A++ = Sigmoid(*Z++);
 #else
-                layer->A[out_idx] = ReLU(layer->Z[out_idx]);
+                *A++ = ReLU(*Z++);
 #endif
             }
         }

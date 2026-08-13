@@ -18,7 +18,7 @@
 
 #include <cmath>
 
-//#define FIXED_SEED 0x11223344
+#define FIXED_SEED 0x11223344
 //#define SIGMOID_ENA
 #define MINI_BATCH_SIZE 1
 
@@ -76,6 +76,8 @@ struct LayerDataType {
 
 struct ConvLayerType {
     int prevdim;    // Previous layer dimension
+    int ksz;        // kernel dimension = sz x sz
+    int knum;       // kernel num
     int dim;        // Current layer dimension
     float K[NUM_FILTERS * KERNEL_DIM];
     float B[NUM_FILTERS];
